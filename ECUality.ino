@@ -7,7 +7,7 @@ const char coolant_temp_pin = A13;
 const char oil_pressure_pin = A11;
 
 unsigned int ms_between_doing_task[10];
-unsigned char timer_for_task[10] = { 0 };
+unsigned int timer_for_task[10] = { 0 };
 void (*task[10]) (void);
 unsigned char n_tasks;
 
@@ -18,8 +18,8 @@ void Delay_Ms( unsigned int );
  
 void setup() 
 {
-	task[0] = readAirFlow;		ms_between_doing_task[0] = 300;
-	task[1] = readO2Sensor;		ms_between_doing_task[1] = 100;
+	task[0] = readAirFlow;		ms_between_doing_task[0] = 50;
+	task[1] = readO2Sensor;		ms_between_doing_task[1] = 300;
 	task[2] = readAirTemp;		ms_between_doing_task[2] = 250;
 	task[3] = readCoolantTemp;	ms_between_doing_task[3] = 250;
 	task[4] = readOilPressure;	ms_between_doing_task[4] = 250;
