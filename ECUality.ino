@@ -1,10 +1,10 @@
 #include "TimerOne.h"
  
-const char air_flow_pin =	A12;
-const char air_temp_pin =	A14;
-const char o2_pin		=	A9;
-const char coolant_temp_pin = A13;
-const char oil_pressure_pin = A11;
+const char air_flow_pin		=	A12;
+const char air_temp_pin		=	A14;
+const char o2_pin			=	A9;
+const char coolant_temp_pin =	A13;
+const char oil_pressure_pin =	A11;
 
 unsigned int ms_between_doing_task[10];
 unsigned int timer_for_task[10] = { 0 };
@@ -13,8 +13,7 @@ unsigned char n_tasks;
 
 unsigned char air_flow, air_temp, o2, coolant_temp, oil_pressure;
 
- 
-void Delay_Ms( unsigned int );
+unsigned int engine_map[9][9];
  
 void setup() 
 {
@@ -24,6 +23,8 @@ void setup()
 	task[3] = readCoolantTemp;	ms_between_doing_task[3] = 250;
 	task[4] = readOilPressure;	ms_between_doing_task[4] = 250;
 	n_tasks = 5;
+	
+	loadMap(engine_map);
 
   // Initialize the digital pin as an output.
   // Pin 13 has an LED connected on most Arduino boards
@@ -105,28 +106,56 @@ void Delay_Ms( unsigned int d ) {
 
 void readAirFlow()
 {
-	//air_flow = analogRead(air_flow_pin);
-	digitalWrite(13, 1 ^ digitalRead(13));
+	air_flow = analogRead(air_flow_pin);
 }
 
 void readO2Sensor()
 {
-	digitalWrite(12, 1 ^ digitalRead(12));
+	o2 = digitalRead(o2_pin);
 }
 
 void readAirTemp() 
 {
-
+	air_temp = analogRead(air_temp_pin);
 }
 
 void readCoolantTemp() 
 {
-
+	coolant_temp = analogRead(coolant_temp_pin);
 }
 
 void readOilPressure()
 {
+	oil_pressure = analogRead(oil_pressure_pin);
+}
 
+void loadMap(unsigned int engine_map[][9])
+{
+	
+	unsigned int map1[9][9] = {	
+		{ 0,	220,	180,	140,	100,	80, 	60, 	40, 	20 },
+		{ 500,	2473,	2160,	1899,	1789,	1537,	1301,	1185,	1129 },
+		{ 695,	2473,	2161,	1900,	1744,	1484,	1166,	988,	925 },
+		{ 965,	2471,	2171,	1922,	1619,	1176,	945,	775,	776 },
+		{ 1341,	2472,	2170,	1898,	1229,	940,	774,	757,	827 },
+		{ 1863,	2471,	2338,	1632,	949,	749,	635,	676,	710 },
+		{ 2589,	2464,	2006,	1223,	749,	618,	635,	645,	624 },
+		{ 3589,	2476,	1596,	944,	615,	587,	587,	588,	901 },
+		{ 5000,	1931,	1203,	766,	596,	564,	561,	560,	589  }	
+		};
+			
+	engine_map = map1;			
+	
+	/*
+	for (r=0; r < rows; r++)
+	{
+		for (c=0; c < cols; c++)
+		{
+			
+			
+		}
+		
+	} */
 }
 
 void Timer1_isr()
@@ -146,11 +175,7 @@ void Timer1_isr()
 
 }
 
-
-
-
-
 void Toggle_led() {
 	// Toggle LED
-    digitalWrite( 11, digitalRead( 11 ) ^ 1 );
+    digitalWrite( 13, digitalRead( 13 ) ^ 1 );
 }
