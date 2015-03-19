@@ -35,7 +35,7 @@ void setup()
   Timer1.initialize(1000);				// set half-period = 1000 microseconds (1 ms)
   Timer1.attachInterrupt( Timer1_isr ); // attach the service routine here
   
-  attachInterrupt(4, Toggle_led, RISING);  
+  //attachInterrupt(4, Toggle_led, RISING);  
 }
  
 void loop()
@@ -106,12 +106,14 @@ void Delay_Ms( unsigned int d ) {
 
 void readAirFlow()
 {
-	air_flow = analogRead(air_flow_pin);
+	toggle(12);
+	//air_flow = analogRead(air_flow_pin);
 }
 
 void readO2Sensor()
 {
-	o2 = digitalRead(o2_pin);
+	toggle(13);
+	//o2 = digitalRead(o2_pin);
 }
 
 void readAirTemp() 
@@ -175,7 +177,7 @@ void Timer1_isr()
 
 }
 
-void Toggle_led() {
+void toggle(unsigned char pin) {
 	// Toggle LED
-    digitalWrite( 13, digitalRead( 13 ) ^ 1 );
+    digitalWrite( pin, digitalRead( pin ) ^ 1 );
 }
