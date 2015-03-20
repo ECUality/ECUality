@@ -1,5 +1,8 @@
 #include "TimerOne.h"
  
+#define MAX_MAP_SIZE	10
+#define MIN_MAP_SIZE	3
+
 const char air_flow_pin		=	A12;
 const char air_temp_pin		=	A14;
 const char o2_pin			=	A9;
@@ -13,7 +16,10 @@ unsigned char n_tasks;
 
 unsigned char air_flow, air_temp, o2, coolant_temp, oil_pressure;
 
-unsigned int engine_map[9][9];
+// map variables
+unsigned int n_air_gridlines, n_rpm_gridlines;
+unsigned int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
+unsigned int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
  
 void setup() 
 {
@@ -24,7 +30,7 @@ void setup()
 	task[4] = readOilPressure;	ms_between_doing_task[4] = 250;
 	n_tasks = 5;
 	
-	loadMap(engine_map);
+	//receiveMap();
 
   // Initialize the digital pin as an output.
   // Pin 13 has an LED connected on most Arduino boards
@@ -35,6 +41,7 @@ void setup()
   Timer1.initialize(1000);				// set half-period = 1000 microseconds (1 ms)
   Timer1.attachInterrupt( Timer1_isr ); // attach the service routine here
   
+  Serial.begin(115200);
   //attachInterrupt(4, Toggle_led, RISING);  
 }
  
@@ -55,8 +62,10 @@ void Poll_Serial()
 		return;
 	
 	Serial.readBytes(c, 1);
-	receivedNum = Serial.parseInt();
-	Serial.readBytesUntil('\n', &c[2], 8);
+	//Serial.write(c, 1);		// echo
+
+	//receivedNum = Serial.parseInt();
+	//Serial.readBytesUntil('\n', &c[2], 8);
 
 	switch (c[0])
 	{
@@ -67,8 +76,8 @@ void Poll_Serial()
 		Serial.println(receivedNum);
 		break;
 
-	case 'o':		// 'o' for setting O2
-
+	case 'm':		// 'o' for setting O2
+		receiveMap();
 		break;
 
 	case 'r':		// 'r' for setting RPM
@@ -90,6 +99,123 @@ void Poll_Serial()
 	default:
 		Serial.println("not understood");
 	}
+}
+
+int receiveMap()
+{
+	char str[3] = "";	// all zeros.
+	unsigned int new_engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+	unsigned int new_air_gridline[MAX_MAP_SIZE];
+	unsigned int new_rpm_gridline[MAX_MAP_SIZE];
+	unsigned int new_n_air_gridlines, new_n_rpm_gridlines;
+	unsigned int new_map_size;
+
+	Serial.readBytes(str, 2);
+
+	if (strcmp(str, "ap") != 0)
+	{
+		Serial.println("spell 'map' please");
+		return -1;
+	}
+
+	if (!receiveUIntBetween(&new_n_air_gridlines, MIN_MAP_SIZE, MAX_MAP_SIZE, "air_gridlines"))
+		return- 1;
+
+	if (!receiveUIntBetween(&new_n_rpm_gridlines, MIN_MAP_SIZE, MAX_MAP_SIZE, "rpm_gridlines"))
+		return -1;
+
+	if (!receiveUIntArray(new_air_gridline, new_n_air_gridlines, "air gridline"))
+		return -1;
+	
+	if (!receiveUIntArray(new_rpm_gridline, new_n_rpm_gridlines, "rpm gridline"))
+		return -1;
+
+	new_map_size = new_n_air_gridlines * new_n_rpm_gridlines;
+	if (!receiveUIntArray(new_engine_map, new_map_size, "map data"))
+		return -1;
+
+
+	n_air_gridlines = new_n_air_gridlines;
+	n_rpm_gridlines = new_n_rpm_gridlines;
+	copyArray(new_air_gridline, air_gridline, n_air_gridlines);
+	copyArray(new_rpm_gridline, rpm_gridline, n_rpm_gridlines);
+	copyArray(new_engine_map, engine_map, new_map_size);
+
+	while (Serial.readBytesUntil('\n', str, 2));			// dump any additional characters. 
+
+	reportMap();
+	
+}
+void reportMap()
+{
+	int i;
+	report("air_gridline:\n", air_gridline, n_air_gridlines);
+	report("rpm_gridline:\n", rpm_gridline, n_rpm_gridlines);
+	Serial.println("engine_map:");
+	for (i = 0; i < n_rpm_gridlines; ++i)
+	{
+		report(" ", &engine_map[n_air_gridlines*i], n_air_gridlines);
+	}
+	Serial.print("\n");
+}
+void report(char str[], unsigned int *data, unsigned int n)
+{
+	int i;
+	Serial.print(str);
+	for (i = 0; i < n; ++i)
+	{
+		Serial.print(data[i]);
+		Serial.print("\t");
+	}
+	Serial.print("\n");
+}
+char receiveUIntArray(unsigned int *new_array, unsigned int n_array, char str[])
+{
+	unsigned int i;
+
+	Serial.setTimeout(50);	// set the timeout to receive each number to 50ms
+
+	for (i = 0; i < n_array; ++i)
+	{
+		new_array[i] = Serial.parseInt();
+		//Serial.print(new_array[i]);
+
+		if (!new_array[i])
+		{
+			Serial.print("timed out while reading ");
+			Serial.println(str);
+			return 0;
+		}
+
+	}
+	return 1; 
+}
+void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+	{
+		destination_array[i] = source_array[i];
+	}
+}
+char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int upper, char var_name[])
+{
+	unsigned int new_value = Serial.parseInt();
+	if (new_value > upper)
+	{
+		Serial.print("too many ");
+		Serial.println(var_name);
+		return 0;
+	}
+	if (new_value < lower)
+	{
+		Serial.print("too few");
+		Serial.println(var_name);
+		return 0;
+	}
+	*var = new_value;
+	return 1;
 }
 
 void Delay_Ms( unsigned int d ) {
