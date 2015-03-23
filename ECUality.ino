@@ -1,4 +1,7 @@
 #include "TimerOne.h"
+#include <eeprom.h>
+#include "ECUality.h"
+#include "EEPROMAnything.h"
  
 #define MAX_MAP_SIZE	10
 #define MIN_MAP_SIZE	3
@@ -30,19 +33,19 @@ void setup()
 	task[4] = readOilPressure;	ms_between_doing_task[4] = 250;
 	n_tasks = 5;
 	
-	//receiveMap();
+	//loadMapFromEE();
 
-  // Initialize the digital pin as an output.
-  // Pin 13 has an LED connected on most Arduino boards
-  pinMode(13, OUTPUT);    
-  pinMode(12, OUTPUT);
-  pinMode(11, OUTPUT);
+	// Initialize the digital pin as an output.
+	// Pin 13 has an LED connected on most Arduino boards
+	pinMode(13, OUTPUT);    
+	pinMode(12, OUTPUT);
+	pinMode(11, OUTPUT);
   
-  Timer1.initialize(1000);				// set half-period = 1000 microseconds (1 ms)
-  Timer1.attachInterrupt( Timer1_isr ); // attach the service routine here
+	Timer1.initialize(1000);				// set half-period = 1000 microseconds (1 ms)
+	Timer1.attachInterrupt( Timer1_isr ); // attach the service routine here
   
-  Serial.begin(115200);
-  //attachInterrupt(4, Toggle_led, RISING);  
+	Serial.begin(115200);
+	//attachInterrupt(4, Toggle_led, RISING);  
 }
  
 void loop()
@@ -81,26 +84,26 @@ void Poll_Serial()
 		break;
 
 	case 'r':		// 'r' for setting RPM
-
+		reportMap();
 		break;
 
-	case 'c':
-		
+	case 'l':		// 'i' to sample the Injector duration
+		loadMapFromEE();
+		Serial.println("loaded from EE");
 		break;
 
-	case 'i':		// 'i' to sample the Injector duration
-		
-		break;
-
-	case 't':		// 'i' to sample the Injector duration
-		
+	case 's':		// 'r' for setting RPM
+		saveMapToEE();
+		Serial.println("saved map to EE");
 		break;
 
 	default:
 		Serial.println("not understood");
 	}
+	dumpLine();
 }
 
+// Serial to data functions
 int receiveMap()
 {
 	char str[3] = "";	// all zeros.
@@ -141,24 +144,30 @@ int receiveMap()
 	copyArray(new_rpm_gridline, rpm_gridline, n_rpm_gridlines);
 	copyArray(new_engine_map, engine_map, new_map_size);
 
-	while (Serial.readBytesUntil('\n', str, 2));			// dump any additional characters. 
+	dumpLine();		// dump any additional characters. 
 
 	reportMap();
 	
 }
+
+void dumpLine(void)
+{
+	char str[5];
+	while (Serial.readBytesUntil('\n', str, 4));
+}
 void reportMap()
 {
 	int i;
-	report("air_gridline:\n", air_gridline, n_air_gridlines);
-	report("rpm_gridline:\n", rpm_gridline, n_rpm_gridlines);
+	reportArray("air_gridline:\n", air_gridline, n_air_gridlines);
+	reportArray("rpm_gridline:\n", rpm_gridline, n_rpm_gridlines);
 	Serial.println("engine_map:");
 	for (i = 0; i < n_rpm_gridlines; ++i)
 	{
-		report(" ", &engine_map[n_air_gridlines*i], n_air_gridlines);
+		reportArray(" ", &engine_map[n_air_gridlines*i], n_air_gridlines);
 	}
 	Serial.print("\n");
 }
-void report(char str[], unsigned int *data, unsigned int n)
+void reportArray(char str[], unsigned int *data, unsigned int n)
 {
 	int i;
 	Serial.print(str);
@@ -190,15 +199,6 @@ char receiveUIntArray(unsigned int *new_array, unsigned int n_array, char str[])
 	}
 	return 1; 
 }
-void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
-{
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-	{
-		destination_array[i] = source_array[i];
-	}
-}
 char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int upper, char var_name[])
 {
 	unsigned int new_value = Serial.parseInt();
@@ -217,6 +217,109 @@ char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int uppe
 	*var = new_value;
 	return 1;
 }
+void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+	{
+		destination_array[i] = source_array[i];
+	}
+}
+
+// EE access functions
+void loadMapFromEE()
+{
+	// eeprom addresses: 0 = n_air_gridlines, n_rpm_gridlines
+	unsigned int address, map_size, value;
+	address = 0;
+
+	address += EEPROM_readAnything(address, value);
+	if (!assignIfBetween(value, n_air_gridlines, MAX_MAP_SIZE, MIN_MAP_SIZE, "n_air_gridlines"))
+		return;
+
+	address += EEPROM_readAnything(address, value);
+	if (!assignIfBetween(value, n_rpm_gridlines, MAX_MAP_SIZE, MIN_MAP_SIZE, "n_rpm_gridlines"))
+		return;
+
+	address += EEPROM_readAnything(address, air_gridline);
+	address += EEPROM_readAnything(address, rpm_gridline);
+	address += EEPROM_readAnything(address, engine_map);
+	
+}
+char assignIfBetween(const unsigned int source, unsigned int &destination, unsigned int max, unsigned int min, char var_name[])
+{
+	if ((source > MAX_MAP_SIZE) || (source < MIN_MAP_SIZE))
+	{
+		Serial.print(var_name);
+		Serial.println(" out of range");
+		return 0;
+	}
+	destination = source;
+	return 1;
+}
+void saveMapToEE()
+{
+	// eeprom addresses: 0 = n_air_gridlines, n_rpm_gridlines
+	unsigned int address, map_size;
+	address = 0;
+
+	address += EEPROM_writeAnything(address, n_air_gridlines);
+	address += EEPROM_writeAnything(address, n_rpm_gridlines);
+	address += EEPROM_writeAnything(address, air_gridline);
+	address += EEPROM_writeAnything(address, rpm_gridline);
+	address += EEPROM_writeAnything(address, engine_map);
+}
+//template <class T> int EEPROM_writeAnything(int ee, const T& value)
+//{
+//	const byte* p = (const byte*)(const void*)&value;
+//	unsigned int i;
+//	for (i = 0; i < sizeof(value); i++)
+//		EEPROM.write(ee++, *p++);
+//	return i;
+//}
+//template <class T> int EEPROM_readAnything(int ee, T& value)
+//{
+//	byte* p = (byte*)(void*)&value;
+//	unsigned int i;
+//	for (i = 0; i < sizeof(value); i++)
+//		*p++ = EEPROM.read(ee++);
+//	return i;
+//}
+
+//unsigned int readUIntFromEE(unsigned int address)
+//{
+//	unsigned int value = 0;
+//	value = EEPROM.read(address);
+//	value <<= 8;
+//	value |= EEPROM.read(address + 1);
+//	return value;
+//}
+
+//void readUIntArrayFromEE(unsigned int *destination_array, unsigned int start_address, unsigned int length)
+//{
+//	unsigned int i;
+//	for (i = 0; i < length; i++)
+//	{
+//		destination_array[i] = readUIntFromEE(start_address);
+//		start_address += 2; 
+//	}
+//}
+
+//void writeUIntArrayToEE(unsigned int *source_array, unsigned int start_address, unsigned int length )
+//{
+//	unsigned int i;
+//	for (i = 0; i < length; i++)
+//	{
+//		source_array[i] = writeUIntToEE(start_address);
+//		start_address += 2;
+//	}
+//}
+
+
+
+
+
 
 void Delay_Ms( unsigned int d ) {
 	unsigned int  i, k;
@@ -257,34 +360,24 @@ void readOilPressure()
 	oil_pressure = analogRead(oil_pressure_pin);
 }
 
-void loadMap(unsigned int engine_map[][9])
-{
-	
-	unsigned int map1[9][9] = {	
-		{ 0,	220,	180,	140,	100,	80, 	60, 	40, 	20 },
-		{ 500,	2473,	2160,	1899,	1789,	1537,	1301,	1185,	1129 },
-		{ 695,	2473,	2161,	1900,	1744,	1484,	1166,	988,	925 },
-		{ 965,	2471,	2171,	1922,	1619,	1176,	945,	775,	776 },
-		{ 1341,	2472,	2170,	1898,	1229,	940,	774,	757,	827 },
-		{ 1863,	2471,	2338,	1632,	949,	749,	635,	676,	710 },
-		{ 2589,	2464,	2006,	1223,	749,	618,	635,	645,	624 },
-		{ 3589,	2476,	1596,	944,	615,	587,	587,	588,	901 },
-		{ 5000,	1931,	1203,	766,	596,	564,	561,	560,	589  }	
-		};
-			
-	engine_map = map1;			
-	
-	/*
-	for (r=0; r < rows; r++)
-	{
-		for (c=0; c < cols; c++)
-		{
-			
-			
-		}
-		
-	} */
-}
+//void loadMap(unsigned int engine_map[][9])
+//{
+//	
+//	unsigned int map1[9][9] = {	
+//		{ 0,	220,	180,	140,	100,	80, 	60, 	40, 	20 },
+//		{ 500,	2473,	2160,	1899,	1789,	1537,	1301,	1185,	1129 },
+//		{ 695,	2473,	2161,	1900,	1744,	1484,	1166,	988,	925 },
+//		{ 965,	2471,	2171,	1922,	1619,	1176,	945,	775,	776 },
+//		{ 1341,	2472,	2170,	1898,	1229,	940,	774,	757,	827 },
+//		{ 1863,	2471,	2338,	1632,	949,	749,	635,	676,	710 },
+//		{ 2589,	2464,	2006,	1223,	749,	618,	635,	645,	624 },
+//		{ 3589,	2476,	1596,	944,	615,	587,	587,	588,	901 },
+//		{ 5000,	1931,	1203,	766,	596,	564,	561,	560,	589  }	
+//		};
+//			
+//	engine_map = map1;			
+//	
+//}
 
 void Timer1_isr()
 {
