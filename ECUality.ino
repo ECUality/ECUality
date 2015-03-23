@@ -11,6 +11,7 @@ const char air_temp_pin		=	A14;
 const char o2_pin			=	A9;
 const char coolant_temp_pin =	A13;
 const char oil_pressure_pin =	A11;
+const char tach_pin = 19;
 
 unsigned int ms_between_doing_task[10];
 unsigned int timer_for_task[10] = { 0 };
@@ -18,11 +19,14 @@ void (*task[10]) (void);
 unsigned char n_tasks;
 
 unsigned char air_flow, air_temp, o2, coolant_temp, oil_pressure;
+unsigned int tach_period;
 
 // map variables
 unsigned int n_air_gridlines, n_rpm_gridlines;
 unsigned int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
 unsigned int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+unsigned int map_correction[MAX_MAP_SIZE * MAX_MAP_SIZE];
+unsigned int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
  
 void setup() 
 {
@@ -33,7 +37,11 @@ void setup()
 	task[4] = readOilPressure;	ms_between_doing_task[4] = 250;
 	n_tasks = 5;
 	
-	//loadMapFromEE();
+	loadMapFromEE();
+
+	// input interrupt pin
+	pinMode(tach_pin, INPUT);					// This gets attached to an interrupt
+	attachInterrupt(4, tachRisingEdgeISR, RISING);	// interrupt 4 maps to pin 19. 
 
 	// Initialize the digital pin as an output.
 	// Pin 13 has an LED connected on most Arduino boards
@@ -43,6 +51,17 @@ void setup()
   
 	Timer1.initialize(1000);				// set half-period = 1000 microseconds (1 ms)
 	Timer1.attachInterrupt( Timer1_isr ); // attach the service routine here
+
+	// Configure Timer3 for measuring injector pulse duration (using interrupt)
+	TCCR3A = 0;							// clear control register A 
+	TCCR3B = _BV(CS31) | _BV(CS30);		// start the timer at clk/64 prescale. 
+
+	// Configure Timer0 for generating a fast PWM.  16us period, 62.5kHz
+	// CONFIG BITS:
+	// WGM0<3:0>	= 0 (0000)	normal mode, counts up to 0xFFFF.  
+	// COM0A<1:0>	= 2 (10)	clears OC0A on compare match so OCR0A represents "high" time. 
+	// COM0B<1:0>	= 2 (10)	same as A.
+	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
   
 	Serial.begin(115200);
 	//attachInterrupt(4, Toggle_led, RISING);  
@@ -89,18 +108,21 @@ void Poll_Serial()
 
 	case 'l':		// 'i' to sample the Injector duration
 		loadMapFromEE();
-		Serial.println("loaded from EE");
 		break;
 
 	case 's':		// 'r' for setting RPM
 		saveMapToEE();
-		Serial.println("saved map to EE");
 		break;
 
 	default:
 		Serial.println("not understood");
 	}
 	dumpLine();
+}
+void dumpLine(void)
+{
+	char str[5];
+	while (Serial.readBytesUntil('\n', str, 4));
 }
 
 // Serial to data functions
@@ -148,12 +170,6 @@ int receiveMap()
 
 	reportMap();
 	
-}
-
-void dumpLine(void)
-{
-	char str[5];
-	while (Serial.readBytesUntil('\n', str, 4));
 }
 void reportMap()
 {
@@ -217,15 +233,6 @@ char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int uppe
 	*var = new_value;
 	return 1;
 }
-void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
-{
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-	{
-		destination_array[i] = source_array[i];
-	}
-}
 
 // EE access functions
 void loadMapFromEE()
@@ -245,18 +252,8 @@ void loadMapFromEE()
 	address += EEPROM_readAnything(address, air_gridline);
 	address += EEPROM_readAnything(address, rpm_gridline);
 	address += EEPROM_readAnything(address, engine_map);
+	Serial.println("map loaded from EE");
 	
-}
-char assignIfBetween(const unsigned int source, unsigned int &destination, unsigned int max, unsigned int min, char var_name[])
-{
-	if ((source > MAX_MAP_SIZE) || (source < MIN_MAP_SIZE))
-	{
-		Serial.print(var_name);
-		Serial.println(" out of range");
-		return 0;
-	}
-	destination = source;
-	return 1;
 }
 void saveMapToEE()
 {
@@ -269,57 +266,36 @@ void saveMapToEE()
 	address += EEPROM_writeAnything(address, air_gridline);
 	address += EEPROM_writeAnything(address, rpm_gridline);
 	address += EEPROM_writeAnything(address, engine_map);
+	Serial.println("saved map to EE");
 }
-//template <class T> int EEPROM_writeAnything(int ee, const T& value)
-//{
-//	const byte* p = (const byte*)(const void*)&value;
-//	unsigned int i;
-//	for (i = 0; i < sizeof(value); i++)
-//		EEPROM.write(ee++, *p++);
-//	return i;
-//}
-//template <class T> int EEPROM_readAnything(int ee, T& value)
-//{
-//	byte* p = (byte*)(void*)&value;
-//	unsigned int i;
-//	for (i = 0; i < sizeof(value); i++)
-//		*p++ = EEPROM.read(ee++);
-//	return i;
-//}
+char assignIfBetween(const unsigned int source, unsigned int &destination, unsigned int max, unsigned int min, char var_name[])
+{
+	if ((source > MAX_MAP_SIZE) || (source < MIN_MAP_SIZE))
+	{
+		Serial.print(var_name);
+		Serial.println(" out of range");
+		return 0;
+	}
+	destination = source;
+	return 1;
+}
 
-//unsigned int readUIntFromEE(unsigned int address)
-//{
-//	unsigned int value = 0;
-//	value = EEPROM.read(address);
-//	value <<= 8;
-//	value |= EEPROM.read(address + 1);
-//	return value;
-//}
+void addArrays(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+{
+	unsigned int i;
 
-//void readUIntArrayFromEE(unsigned int *destination_array, unsigned int start_address, unsigned int length)
-//{
-//	unsigned int i;
-//	for (i = 0; i < length; i++)
-//	{
-//		destination_array[i] = readUIntFromEE(start_address);
-//		start_address += 2; 
-//	}
-//}
+	for (i = 0; i < n; i++)
+		destination_array[i] += source_array[i];
+}
+void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+{
+	unsigned int i;
 
-//void writeUIntArrayToEE(unsigned int *source_array, unsigned int start_address, unsigned int length )
-//{
-//	unsigned int i;
-//	for (i = 0; i < length; i++)
-//	{
-//		source_array[i] = writeUIntToEE(start_address);
-//		start_address += 2;
-//	}
-//}
-
-
-
-
-
+	for (i = 0; i < n; i++)
+	{
+		destination_array[i] = source_array[i];
+	}
+}
 
 void Delay_Ms( unsigned int d ) {
 	unsigned int  i, k;
@@ -333,51 +309,29 @@ void Delay_Ms( unsigned int d ) {
 	}
 }
 
+// Sensor reading functions
 void readAirFlow()
 {
 	toggle(12);
 	//air_flow = analogRead(air_flow_pin);
 }
-
 void readO2Sensor()
 {
 	toggle(13);
 	//o2 = digitalRead(o2_pin);
 }
-
 void readAirTemp() 
 {
 	air_temp = analogRead(air_temp_pin);
 }
-
 void readCoolantTemp() 
 {
 	coolant_temp = analogRead(coolant_temp_pin);
 }
-
 void readOilPressure()
 {
 	oil_pressure = analogRead(oil_pressure_pin);
 }
-
-//void loadMap(unsigned int engine_map[][9])
-//{
-//	
-//	unsigned int map1[9][9] = {	
-//		{ 0,	220,	180,	140,	100,	80, 	60, 	40, 	20 },
-//		{ 500,	2473,	2160,	1899,	1789,	1537,	1301,	1185,	1129 },
-//		{ 695,	2473,	2161,	1900,	1744,	1484,	1166,	988,	925 },
-//		{ 965,	2471,	2171,	1922,	1619,	1176,	945,	775,	776 },
-//		{ 1341,	2472,	2170,	1898,	1229,	940,	774,	757,	827 },
-//		{ 1863,	2471,	2338,	1632,	949,	749,	635,	676,	710 },
-//		{ 2589,	2464,	2006,	1223,	749,	618,	635,	645,	624 },
-//		{ 3589,	2476,	1596,	944,	615,	587,	587,	588,	901 },
-//		{ 5000,	1931,	1203,	766,	596,	564,	561,	560,	589  }	
-//		};
-//			
-//	engine_map = map1;			
-//	
-//}
 
 void Timer1_isr()
 {
@@ -396,6 +350,23 @@ void Timer1_isr()
 
 }
 
+void tachRisingEdgeISR()
+{
+	tach_period = TCNT3; 		// record the timer setting 
+	TCNT3 = 0;					// start the timer over. 
+
+	// set all injectors high (in same instruction)
+	PORTL |= 0xAA;				// 0b10101010;
+	PORTG |= PG1;
+}
+
+ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A. 
+{
+	// set all injectors low (in same instruction)
+	PORTL &= 0x55;				// 0b01010101; 
+	PORTG &= ~PG1;
+	
+}
 void toggle(unsigned char pin) {
 	// Toggle LED
     digitalWrite( pin, digitalRead( pin ) ^ 1 );
