@@ -6,6 +6,7 @@
 #define MAX_MAP_SIZE	10
 #define MIN_MAP_SIZE	3
 
+// Pin mappings
 const char air_flow_pin		=	A12;
 const char air_temp_pin		=	A14;
 const char o2_pin			=	A9;
@@ -13,13 +14,27 @@ const char coolant_temp_pin =	A13;
 const char oil_pressure_pin =	A11;
 const char tach_pin = 19;
 
+const char inj1_pin = 42;
+const char inj2_pin = 44;
+const char inj3_pin = 46;
+const char inj4_pin = 48;
+
+// operating control variables
+unsigned char air_stabilize_rate;	// the rate at which accelerator pump transient decays.
+unsigned int cold_enrich_rate;		// how aggressive the enrichment is with respect to temperature. 
+unsigned int cold_threshold;		// the temperature below which enrichment kicks in. 
+
 unsigned int ms_between_doing_task[10];
 unsigned int timer_for_task[10] = { 0 };
 void (*task[10]) (void);
 unsigned char n_tasks;
 
-unsigned char air_flow, air_temp, o2, coolant_temp, oil_pressure;
+// sensor input variables
+int air_flow, o2, air_temp, coolant_temp, oil_pressure;
 unsigned int tach_period;
+
+// variables that capture dynamic aspects of sensor input
+int air_flow_d, air_flow_snap, o2_d;	
 
 // map variables
 unsigned int n_air_gridlines, n_rpm_gridlines;
@@ -30,17 +45,24 @@ unsigned int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
  
 void setup() 
 {
-	task[0] = readAirFlow;		ms_between_doing_task[0] = 50;
+	task[0] = readAirFlow;		ms_between_doing_task[0] = 250;
 	task[1] = readO2Sensor;		ms_between_doing_task[1] = 300;
 	task[2] = readAirTemp;		ms_between_doing_task[2] = 250;
 	task[3] = readCoolantTemp;	ms_between_doing_task[3] = 250;
 	task[4] = readOilPressure;	ms_between_doing_task[4] = 250;
+	task[5] = calcStuff;		ms_between_doing_task[5] = 20;
 	n_tasks = 5;
 	
 	loadMapFromEE();
 
 	// input interrupt pin
 	pinMode(tach_pin, INPUT);					// This gets attached to an interrupt
+
+	pinMode(inj1_pin, OUTPUT);
+	pinMode(inj2_pin, OUTPUT);
+	pinMode(inj3_pin, OUTPUT);
+	pinMode(inj4_pin, OUTPUT);
+
 	attachInterrupt(4, tachRisingEdgeISR, RISING);	// interrupt 4 maps to pin 19. 
 
 	// Initialize the digital pin as an output.
@@ -55,6 +77,12 @@ void setup()
 	// Configure Timer3 for measuring injector pulse duration (using interrupt)
 	TCCR3A = 0;							// clear control register A 
 	TCCR3B = _BV(CS31) | _BV(CS30);		// start the timer at clk/64 prescale. 
+	
+	TIMSK3 |= _BV(OCIE3A);				// enable output compare A interrupt on timer 3
+	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
+	//TIMSK0 &= 0x00;					
+
+	setInjectorDuration(5);
 
 	// Configure Timer0 for generating a fast PWM.  16us period, 62.5kHz
 	// CONFIG BITS:
@@ -86,8 +114,6 @@ void Poll_Serial()
 	Serial.readBytes(c, 1);
 	//Serial.write(c, 1);		// echo
 
-	//receivedNum = Serial.parseInt();
-	//Serial.readBytesUntil('\n', &c[2], 8);
 
 	switch (c[0])
 	{
@@ -98,20 +124,27 @@ void Poll_Serial()
 		Serial.println(receivedNum);
 		break;
 
-	case 'm':		// 'o' for setting O2
+	case 'm':		// MAP update
 		receiveMap();
 		break;
 
-	case 'r':		// 'r' for setting RPM
+	case 'r':		// REPORT map
 		reportMap();
 		break;
 
-	case 'l':		// 'i' to sample the Injector duration
+	case 'l':		// LOAD map from ee
 		loadMapFromEE();
 		break;
 
-	case 's':		// 'r' for setting RPM
+	case 's':		// SAVE map
 		saveMapToEE();
+		break;
+
+	case 'd':		// DURATION manual control
+		receivedNum = Serial.parseInt();
+		setInjectorDuration(receivedNum);
+		Serial.print("Injector dur set to: ");
+		Serial.println(receivedNum);
 		break;
 
 	default:
@@ -297,28 +330,32 @@ void copyArray(unsigned int source_array[], unsigned int destination_array[], un
 	}
 }
 
-void Delay_Ms( unsigned int d ) {
-	unsigned int  i, k;
-	for ( i=0; i<d; i++ )
-	{
-		for ( k=0; k<2000; k++) 
-		{
-			asm volatile ("NOP");
-		}
-			
-	}
-}
-
 // Sensor reading functions
 void readAirFlow()
 {
-	toggle(12);
-	//air_flow = analogRead(air_flow_pin);
+	toggle(13);
+
+	air_flow_d = -air_flow;
+	air_flow = analogRead(air_flow_pin);	// takes 100us.  Should shorten
+	air_flow_d += air_flow;
+
+	air_flow_snap += air_flow_d;
+
+	if (air_flow_snap)
+	{
+		if (air_flow_snap > air_stabilize_rate)
+			air_flow_snap -= air_stabilize_rate;
+		else
+			air_flow_snap = 0;
+	}
+
+
 }
 void readO2Sensor()
 {
-	toggle(13);
-	//o2 = digitalRead(o2_pin);
+	o2_d = -o2;
+	o2 = analogRead(o2_pin);		// this takes 100us.  Should shorten
+	o2_d += o2;
 }
 void readAirTemp() 
 {
@@ -330,7 +367,98 @@ void readCoolantTemp()
 }
 void readOilPressure()
 {
+	// .5V = 0psi  4.5V = 100psi.  25psi/V 
+	// 25psi/V * 5V/1023tic = .1222 psi/tic
+	// 1 psi ~ 8 tics. 
 	oil_pressure = analogRead(oil_pressure_pin);
+}
+
+unsigned int interpolateMap(unsigned char air, unsigned int rpm)
+{
+	int i_air, i_rpm;
+	unsigned int inj_r0a0, inj_r0a1, inj_r1a0, inj_r1a1, inj_r0ak, inj_r1ak;  // 
+	i_air = findIndexJustAbove(air_gridline, air, n_air_gridlines);
+	i_rpm = findIndexJustAbove(air_gridline, air, n_air_gridlines);
+
+	// check if both i's are -1 (key was higher than all array elements)
+	// check if any of them are 0 (key was lower than lowest element)
+	// handle those cases
+	
+	inj_r0a0 = engine_map[(i_rpm - 1)*n_air_gridlines+i_air - 1];		// use pointer math instead? 
+	inj_r0a1 = engine_map[(i_rpm - 1)*n_air_gridlines+i_air];
+	inj_r1a0 = engine_map[i_rpm*n_air_gridlines+i_air - 1];
+	inj_r1a1 = engine_map[i_rpm*n_air_gridlines+i_air];
+
+	// here we do bilinear interpolation
+	inj_r0ak = linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], inj_r0a0, inj_r0a1);
+	inj_r1ak = linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], inj_r1a0, inj_r1a1);
+	return linearInterp(rpm, rpm_gridline[i_rpm - 1], rpm_gridline[i_rpm], inj_r0ak, inj_r1ak);
+
+}
+int linearInterp(int x_key, int x1, int x2, int y1, int y2)
+{
+	int dx, Dx, Dy;
+	Dx = x2 - x1;
+	dx = x_key - x1; 
+	Dy = y2 - y1;
+	return y1 + (Dy*dx) / Dx;
+}
+int findIndexJustAbove(unsigned int array[], int key, int length)
+{
+	int i;
+	for (i = 0; i < length; i++)
+	{
+		if (array[i] > key)
+			return i;
+	}
+	// didn't find a value above key.  Return -1 to indicate an error. 
+	return -1;
+}
+
+int adjustForTakeoff( int air_flow )
+{
+	return 0;
+}
+int adjustForColdEngine(unsigned int &duration, int coolant_temp, int air_flow)
+{
+	static unsigned int adjustment;
+	// applies a positive offset to injector duration.  
+	// offset depends linearly on coolant temperature.  
+	// offset depends linearly on injector duration (works like a % of normal)
+	// Parameters: 
+	// takes a threshold temp and a rate (mx +b) for linear dependence on  coolant temperature
+
+	if (coolant_temp >= cold_threshold)		// is engine already warm? 
+		return 0; 
+	adjustment = cold_enrich_rate * (cold_threshold - coolant_temp) * duration;
+	adjustment >>= 6;			// divide by 64; 
+	return adjustment;
+}
+int adjustForCoasting( int rpm, int air_flow )
+{
+	return 0;
+}
+
+void setInjectorDuration(unsigned int new_inj_duration)	// sets the injector duration
+{
+	OCR3A = new_inj_duration;
+}
+
+void Delay_Ms(unsigned int d) {
+	unsigned int  i, k;
+	for (i = 0; i<d; i++)
+	{
+		for (k = 0; k<2000; k++)
+		{
+			asm volatile ("NOP");
+		}
+
+	}
+}
+void toggle(unsigned char pin) 
+{
+	// Toggle LED
+	digitalWrite(pin, digitalRead(pin) ^ 1);
 }
 
 void Timer1_isr()
@@ -349,25 +477,20 @@ void Timer1_isr()
 	}
 
 }
-
 void tachRisingEdgeISR()
 {
+	GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
 	tach_period = TCNT3; 		// record the timer setting 
 	TCNT3 = 0;					// start the timer over. 
 
 	// set all injectors high (in same instruction)
 	PORTL |= 0xAA;				// 0b10101010;
-	PORTG |= PG1;
+	//PORTG |= PG1;				// this can be dropped if I move a pin over
 }
-
 ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A. 
 {
 	// set all injectors low (in same instruction)
 	PORTL &= 0x55;				// 0b01010101; 
-	PORTG &= ~PG1;
-	
+	//PORTG &= ~PG1;
 }
-void toggle(unsigned char pin) {
-	// Toggle LED
-    digitalWrite( pin, digitalRead( pin ) ^ 1 );
-}
+
