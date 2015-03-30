@@ -1,26 +1,29 @@
-//#include "TimerOne.h"
-#include <eeprom.h>
-#include "ECUality.h"
-#include "EEPROMAnything.h"
- 
-#define MAX_MAP_SIZE	10
-#define MIN_MAP_SIZE	3
 
-char inspect;
+#include "ECUality.h"
+#include <eeprom.h>
+#include "EEPROMAnything.h"
+
 
 // Pin mappings
-uint8_t air_flow_pin		= A12;
-uint8_t air_temp_pin		= A14;
-uint8_t o2_pin				= A9;
-uint8_t coolant_temp_pin	= A13;
-uint8_t oil_pressure_pin	= A11;
-uint8_t tach_pin			= 19;
-uint8_t idl_full_pin		= A10;
+uint8_t air_flow_pin = A12;
+uint8_t air_temp_pin = A14;
+uint8_t o2_pin = A9;
+uint8_t coolant_temp_pin = A13;
+uint8_t oil_pressure_pin = A11;
+uint8_t tach_pin = 19;
+uint8_t idl_full_pin = A10;
 
 const char inj1_pin = 42;
 const char inj2_pin = 44;
 const char inj3_pin = 46;
 const char inj4_pin = 48;
+
+
+#define MAX_MAP_SIZE	10
+#define MIN_MAP_SIZE	3
+
+extern int inspect[5] = {};
+
 
 // operating control variables
 unsigned char air_stabilize_rate;	// the rate at which accelerator pump transient decays.
@@ -31,7 +34,7 @@ unsigned int cold_threshold;		// the temperature below which enrichment kicks in
 unsigned int ms_freq_of_task[10];
 unsigned int task_runtime[10];
 unsigned int ms_since_last_task[10] = { 0 };
-void (*task[10]) (void);
+void(*task[10]) (void);
 unsigned char n_tasks;
 
 // sensor input variables
@@ -39,7 +42,7 @@ int air_flow, rpm, o2, air_temp, coolant_temp, oil_pressure;
 unsigned int tach_period, inj_duration;
 
 // variables that capture dynamic aspects of sensor input
-int air_flow_d, air_flow_snap, o2_d;	
+int air_flow_d, air_flow_snap, o2_d;
 
 // map variables
 unsigned int n_air, n_rpm;
@@ -47,12 +50,11 @@ unsigned int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
 unsigned int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 unsigned int map_correction[MAX_MAP_SIZE * MAX_MAP_SIZE];
 unsigned int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
+
  
 void setup() 
 {
 	Serial.begin(115200);
-
-	inspect = 0;
 	
 	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
 	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
@@ -107,20 +109,19 @@ void setup()
  
 void loop()
 {
-
 	Poll_Serial();
-
-	
 }
 
+
+// Serial functions
 void Poll_Serial()
 {
 	static char c[10];
-	static unsigned int receivedNum; 
+	static unsigned int receivedNum;
 
 	if (!Serial.available())
 		return;
-	
+
 	Serial.readBytes(c, 1);
 	//Serial.write(c, 1);		// echo
 
@@ -155,7 +156,11 @@ void Poll_Serial()
 
 	case 'i':
 		Serial.print("inj duration: ");
-		Serial.println(inj_duration); 
+		Serial.println(inj_duration);
+		break;
+
+	case 'I':
+		reportArray("dx Dx Dy m dx*m:", inspect, 5);
 		break;
 
 	case 't':
@@ -192,14 +197,14 @@ int receiveMap()
 	}
 
 	if (!receiveUIntBetween(&new_n_air, MIN_MAP_SIZE, MAX_MAP_SIZE, "air_gridlines"))
-		return- 1;
+		return-1;
 
 	if (!receiveUIntBetween(&new_n_rpm, MIN_MAP_SIZE, MAX_MAP_SIZE, "rpm_gridlines"))
 		return -1;
 
 	if (!receiveUIntArray(new_air_gridline, new_n_air, "air gridline"))
 		return -1;
-	
+
 	if (!receiveUIntArray(new_rpm_gridline, new_n_rpm, "rpm gridline"))
 		return -1;
 
@@ -217,7 +222,7 @@ int receiveMap()
 	dumpLine();		// dump any additional characters. 
 
 	reportMap();
-	
+
 }
 void reportMap()
 {
@@ -230,18 +235,6 @@ void reportMap()
 		reportArray(" ", &engine_map[n_air*i], n_air);
 	}
 	Serial.print("\n");
-}
-void reportArray(char str[], unsigned int *data, unsigned int n)
-{
-	int i;
-	Serial.print(str);
-	Serial.print("\t");
-	for (i = 0; i < n; ++i)
-	{
-		Serial.print(data[i]);
-		Serial.print("\t");
-	}
-	Serial.println();
 }
 char receiveUIntArray(unsigned int *new_array, unsigned int n_array, char str[])
 {
@@ -262,7 +255,7 @@ char receiveUIntArray(unsigned int *new_array, unsigned int n_array, char str[])
 		}
 
 	}
-	return 1; 
+	return 1;
 }
 char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int upper, char var_name[])
 {
@@ -283,6 +276,7 @@ char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int uppe
 	return 1;
 }
 
+
 // EE access functions
 void loadMapFromEE()
 {
@@ -302,7 +296,7 @@ void loadMapFromEE()
 	address += EEPROM_readAnything(address, rpm_gridline);
 	address += EEPROM_readAnything(address, engine_map);
 	Serial.println("map loaded from EE");
-	
+
 }
 void saveMapToEE()
 {
@@ -329,22 +323,6 @@ char assignIfBetween(const unsigned int source, unsigned int &destination, unsig
 	return 1;
 }
 
-void addArrays(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
-{
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-		destination_array[i] += source_array[i];
-}
-void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
-{
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-	{
-		destination_array[i] = source_array[i];
-	}
-}
 
 // Sensor reading functions
 void readAirFlow()
@@ -504,12 +482,13 @@ unsigned int mapPoint(uint8_t i_rpm, uint8_t i_air)
 }
 int linearInterp(int x_key, int x1, int x2, int y1, int y2)
 {
-	float dx;
-	int Dx, Dy;
+	int dx, Dx;
+	long Dy;
 	Dx = x2 - x1;
 	dx = x_key - x1; 
 	Dy = y2 - y1;
-	return y1 + int(Dy*(dx / Dx));
+
+	return y1 + (Dy*dx)/Dx;
 }
 int findIndexJustAbove(unsigned int array[], int key, int length)
 {		// assumes the input array is sorted high to low. 
@@ -554,6 +533,23 @@ char areWeCoasting( unsigned int rpm, unsigned char air_flow )
 		return 0;
 }
 
+// Array functions
+void addArrays(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+		destination_array[i] += source_array[i];
+}
+void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+	{
+		destination_array[i] = source_array[i];
+	}
+}
 
 void Delay_Ms(unsigned int d) {
 	unsigned int  i, k;
