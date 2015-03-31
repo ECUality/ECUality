@@ -78,19 +78,11 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ArrayFunctions.h" />
-    <ClInclude Include="Comm.h" />
     <ClInclude Include="ECUality.h">
       <FileType>CppCode</FileType>
     </ClInclude>
     <ClInclude Include="EEPROMAnything.h" />
-    <ClInclude Include="MapMaintain.h" />
     <ClInclude Include="Visual Micro\.ECUality.vsarduino.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="ArrayFunctions.cpp" />
-    <ClCompile Include="Comm.cpp" />
-    <ClCompile Include="MapMaintain.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

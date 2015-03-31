@@ -2,33 +2,45 @@
 #include "ECUality.h"
 #include <eeprom.h>
 #include "EEPROMAnything.h"
+#include "ECUality.h"
 
+#define PARAM_EE_ADR	0
+#define MAP_EE_ADR		16
+#define OFFSET_EE_ADR	512
 
 // Pin mappings
-uint8_t air_flow_pin = A12;
-uint8_t air_temp_pin = A14;
-uint8_t o2_pin = A9;
-uint8_t coolant_temp_pin = A13;
-uint8_t oil_pressure_pin = A11;
-uint8_t tach_pin = 19;
-uint8_t idl_full_pin = A10;
+const char air_flow_pin = A12;
+const char air_temp_pin = A14;
+const char o2_pin = A9;
+const char coolant_temp_pin = A13;
+const char oil_pressure_pin = A11;
+const char tach_pin = 19;
+const char idl_full_pin = A10;
 
 const char inj1_pin = 42;
 const char inj2_pin = 44;
 const char inj3_pin = 46;
 const char inj4_pin = 48;
 
+const char cranking_pin = 10;
 
-#define MAX_MAP_SIZE	10
-#define MIN_MAP_SIZE	3
+
+#define MAX_MAP_SIZE	10U
+#define MIN_MAP_SIZE	3U
 
 extern int inspect[5] = {};
 
 
+// alternate paramater data structure
+const unsigned char n_params = 4;
+unsigned int params[n_params] = {0};
+char *param_names[] = { "air_stabilize_rate", "cold_eng_enrich_rate", "cold_threshold", "cranking_dur" };
+
 // operating control variables
-unsigned char air_stabilize_rate;	// the rate at which accelerator pump transient decays.
-unsigned int cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. 
-unsigned int cold_threshold;		// the temperature below which enrichment kicks in. 
+unsigned int air_stabilize_rate;		// the rate at which accelerator pump transient decays.
+unsigned int cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
+unsigned int cold_threshold;			// the temperature below which enrichment kicks in. 
+unsigned int cranking_dur;				// the constant duration that gets sent while cranking
 
 // task variables
 unsigned int ms_freq_of_task[10];
@@ -47,13 +59,16 @@ int air_flow_d, air_flow_snap, o2_d;
 // map variables
 unsigned int n_air, n_rpm;
 unsigned int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
-unsigned int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-unsigned int map_correction[MAX_MAP_SIZE * MAX_MAP_SIZE];
-unsigned int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
+int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
+int global_offset; 
 
  
 void setup() 
 {
+	char good_ee_loads = 1;
+
 	Serial.begin(115200);
 	
 	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
@@ -65,10 +80,10 @@ void setup()
 	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
 	n_tasks = 7;
 	
-	loadMapFromEE();  
-
 	// input interrupt pin
 	pinMode(tach_pin, INPUT);					// This gets attached to an interrupt
+	pinMode(cranking_pin, INPUT);
+
 	pinMode(inj1_pin, OUTPUT);
 	pinMode(inj2_pin, OUTPUT);
 	pinMode(inj3_pin, OUTPUT);
@@ -77,10 +92,11 @@ void setup()
 
 	inj_duration = 5;
 
+	good_ee_loads &= loadParamsFromEE();
+	good_ee_loads &= loadMapFromEE();
+	good_ee_loads &= loadOffsetsFromEE();
+
 	// TIMERS
-	//Timer1.initialize(2000);				// set half-period = 1000 microseconds (1 ms)
-	//Timer1.attachInterrupt( isrTimer1 ); // attach the service routine here
-	
 	TCCR1A = 0;				// disables all output compare modules and clears WGM1<0-1> 
 	TCCR1B = _BV(CS10);		// sets prescaler to 1:1, and turns on timer, clears WGM1<3:2>
 	TCCR1B |= _BV(WGM12) | _BV(WGM13);	// 
@@ -103,10 +119,11 @@ void setup()
 	// COM0A<1:0>	= 2 (10)	clears OC0A on compare match so OCR0A represents "high" time. 
 	// COM0B<1:0>	= 2 (10)	same as A.
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
-
-	attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+	if (good_ee_loads)
+		attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+	else
+		Serial.println("Error loading EEPROM data.  Injectors stopped");
 }
- 
 void loop()
 {
 	Poll_Serial();
@@ -128,44 +145,103 @@ void Poll_Serial()
 
 	switch (c[0])
 	{
-	case 'a':		// 'a' for setting air %
+	case 'a':					// report air flow
 		Serial.print("Air flow: ");
 		Serial.println(air_flow);
 		break;
 
-	case 'r':
+	case 'r':					// report rpm
 		Serial.print("rpm: ");
 		Serial.println(rpm);
 		break;
 
-	case 'M':		// MAP update
-		receiveMap();
+	case'p':					// preport params
+		reportParams();
 		break;
 
-	case 'm':		// REPORT map
+	case 'm':					// report map
 		reportMap();
 		break;
 
-	case 'L':		// LOAD map from ee
-		loadMapFromEE();
-		break;
-
-	case 'S':		// SAVE map
-		saveMapToEE();
-		break;
-
-	case 'i':
+	case 'i':					// report injector duration
 		Serial.print("inj duration: ");
 		Serial.println(inj_duration);
 		break;
 
-	case 'I':
-		reportArray("dx Dx Dy m dx*m:", inspect, 5);
+	case 'I':					// report Inspection
+		reportArray("inspect array", inspect, 5);
 		break;
 
-	case 't':
+	case 't':					// report task runtimes
 		reportArray("Task runtimes in us: ", task_runtime, n_tasks);
 		break;
+
+	case'n':					// report n_rpm and n_air
+		Serial.print("n_rpm: ");
+		Serial.print(n_rpm);
+		Serial.print("   n_air: ");
+		Serial.println(n_air);
+		break;
+
+	case 'o':
+		reportOffsets();
+
+	case 'L':					// increase fuel locally
+		localOffset(16);	
+		Serial.print(".");
+		break;
+
+	case 'l':					// decrease fuel locally 
+		localOffset(-16);
+		Serial.print(".");
+		break;
+
+	case 'G':					// increase fuel globally 
+		global_offset += 16;
+		Serial.print(".");
+		break;
+
+	case 'g':					// decrease fuel globally
+		global_offset -= 16; 
+		Serial.print(".");
+		break;
+
+	case 'C':					// clear all local offsets
+		clearArray(correction_map, MAX_MAP_SIZE*MAX_MAP_SIZE);
+		break;
+		
+	case 'c':					// clear global offset
+		global_offset = 0;
+		break;
+
+	case 'P':					// Parameter update
+		receiveParams();
+		break;
+
+	case 'M':					// MAP update
+		receiveMap();
+		break;
+
+	case 'S':					// SAVE params, map to EE
+		saveParamsToEE();
+		saveMapToEE();
+		break;
+
+	case'E':					// Load params, map, offsets from EEPROM
+		loadParamsFromEE();
+		loadMapFromEE();
+		loadOffsetsFromEE();
+		break;
+
+	case 'O':
+		saveOffsetsToEE();
+		break;
+
+	case 'T':
+		inspect[0] = 3;
+		EEPROM_writeAnything(0, inspect[0]);
+		EEPROM_readAnything(0, inspect[0]);
+		Serial.println(inspect[0]);
 
 	default:
 		Serial.println("no comprendo");
@@ -179,10 +255,10 @@ void dumpLine(void)
 }
 
 // Serial to data functions
-int receiveMap()
+char receiveMap()
 {
 	char str[3] = "";	// all zeros.
-	unsigned int new_engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+	int new_engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 	unsigned int new_air_gridline[MAX_MAP_SIZE];
 	unsigned int new_rpm_gridline[MAX_MAP_SIZE];
 	unsigned int new_n_air, new_n_rpm;
@@ -196,20 +272,20 @@ int receiveMap()
 		return -1;
 	}
 
-	if (!receiveUIntBetween(&new_n_air, MIN_MAP_SIZE, MAX_MAP_SIZE, "air_gridlines"))
+	if (!receiveNumberBetween(&new_n_air, MIN_MAP_SIZE, MAX_MAP_SIZE, "air_gridlines"))
 		return-1;
 
-	if (!receiveUIntBetween(&new_n_rpm, MIN_MAP_SIZE, MAX_MAP_SIZE, "rpm_gridlines"))
+	if (!receiveNumberBetween(&new_n_rpm, MIN_MAP_SIZE, MAX_MAP_SIZE, "rpm_gridlines"))
 		return -1;
 
-	if (!receiveUIntArray(new_air_gridline, new_n_air, "air gridline"))
+	if (!receiveArray(new_air_gridline, new_n_air, "air gridline"))
 		return -1;
 
-	if (!receiveUIntArray(new_rpm_gridline, new_n_rpm, "rpm gridline"))
+	if (!receiveArray(new_rpm_gridline, new_n_rpm, "rpm gridline"))
 		return -1;
 
 	new_map_size = new_n_air * new_n_rpm;
-	if (!receiveUIntArray(new_engine_map, new_map_size, "map data"))
+	if (!receiveArray(new_engine_map, new_map_size, "map data"))
 		return -1;
 
 
@@ -220,9 +296,7 @@ int receiveMap()
 	copyArray(new_engine_map, engine_map, new_map_size);
 
 	dumpLine();		// dump any additional characters. 
-
 	reportMap();
-
 }
 void reportMap()
 {
@@ -236,81 +310,165 @@ void reportMap()
 	}
 	Serial.print("\n");
 }
-char receiveUIntArray(unsigned int *new_array, unsigned int n_array, char str[])
+char receiveParams()
 {
-	unsigned int i;
+	char str[3] = "";	// all zeros.
 
-	Serial.setTimeout(50);	// set the timeout to receive each number to 50ms
+	unsigned int new_air_stabilize_rate;		// the rate at which accelerator pump transient decays.
+	unsigned int new_cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
+	unsigned int new_cold_threshold;			// the temperature below which enrichment kicks in. 
+	unsigned int new_cranking_dur;				// the constant duration that gets sent while cranking
 
-	for (i = 0; i < n_array; ++i)
-	{
-		new_array[i] = Serial.parseInt();
-		//Serial.print(new_array[i]);
+	//receiveArray(params, n_params, "param array");
 
-		if (!new_array[i])
-		{
-			Serial.print("timed out while reading ");
-			Serial.println(str);
-			return 0;
-		}
+	if (!receiveNumberBetween(&new_air_stabilize_rate, 0, 200, "air_stabilize_rate"))
+		return-1;
+	if (!receiveNumberBetween(&new_cold_eng_enrich_rate, 1, 16, "cold_eng_enrich_rate"))
+		return-1;
+	if (!receiveNumberBetween(&new_cold_threshold, 200, 800, "cold_threshold"))
+		return-1;
+	if (!receiveNumberBetween(&new_cranking_dur, 500, 2000, "cranking_dur"))
+		return-1;
 
-	}
-	return 1;
+	air_stabilize_rate = new_air_stabilize_rate;
+	cold_eng_enrich_rate = new_cold_eng_enrich_rate;
+	cold_threshold = new_cold_threshold;
+	cranking_dur = new_cranking_dur;
+
+	dumpLine();			// dump any additional characters. 
+	reportParams();
 }
-char receiveUIntBetween(unsigned int *var, unsigned int lower, unsigned int upper, char var_name[])
+void reportParams()
 {
-	unsigned int new_value = Serial.parseInt();
-	if (new_value > upper)
-	{
-		Serial.print("too many ");
-		Serial.println(var_name);
-		return 0;
-	}
-	if (new_value < lower)
-	{
-		Serial.print("too few");
-		Serial.println(var_name);
-		return 0;
-	}
-	*var = new_value;
-	return 1;
+	Serial.print("air_stabilize_rate: ");
+	Serial.print(air_stabilize_rate);
+	Serial.print("   cold_eng_enrich_rate: ");
+	Serial.print(cold_eng_enrich_rate);
+	Serial.print("   cold_threshold: ");
+	Serial.print(cold_threshold);
+	Serial.print("   cranking_dur: ");
+	Serial.println(cranking_dur);
 }
+void reportOffsets()
+{
+	int i;
 
+	Serial.print("global_offset: ");
+	Serial.println(global_offset);
+
+	for (i = 0; i < n_rpm; ++i)
+	{
+		reportArray(" ", &correction_map[n_air*i], n_air);
+	}
+	Serial.println();
+}
 
 // EE access functions
-void loadMapFromEE()
+char loadParamsFromEE()
+{
+	unsigned int address;
+	address = PARAM_EE_ADR;
+
+	char good = 1;
+	unsigned int new_air_stabilize_rate;		// the rate at which accelerator pump transient decays.
+	unsigned int new_cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
+	unsigned int new_cold_threshold;			// the temperature below which enrichment kicks in. 
+	unsigned int new_cranking_dur;				// the constant duration that gets sent while cranking
+
+	address += EEPROM_readAnything(address, new_air_stabilize_rate);	// 1 bytes unsigned char
+	address += EEPROM_readAnything(address, new_cold_eng_enrich_rate);	// 1 bytes char
+	address += EEPROM_readAnything(address, new_cold_threshold);		// 2 bytes unsigned int
+	address += EEPROM_readAnything(address, new_cranking_dur);			// 2 bytes unsigned int		TOTAL: 6 of 16
+
+	good = good && (new_air_stabilize_rate >= 0) && (new_air_stabilize_rate <= 100);
+	good = good && (new_cold_eng_enrich_rate >= 1) && (new_cold_eng_enrich_rate <= 16);
+	good = good && (new_cold_threshold >= 200) && (new_cold_threshold <= 800);
+	good = good && (new_cranking_dur >= 500) && (new_cranking_dur <= 1024);
+
+	if (!good)
+	{
+		Serial.println("invalid parameter.");
+		return 0;
+	}
+
+	air_stabilize_rate = new_air_stabilize_rate;
+	cold_eng_enrich_rate = new_cold_eng_enrich_rate;
+	cold_threshold = new_cold_threshold;
+	cranking_dur = new_cranking_dur;
+
+	Serial.println("loaded params from EE.");
+	return 1;
+}
+void saveParamsToEE()
+{
+	unsigned int address;
+	address = PARAM_EE_ADR;
+
+	address += EEPROM_writeAnything(address, air_stabilize_rate);	// 2 bytes unsigned char
+	address += EEPROM_writeAnything(address, cold_eng_enrich_rate);	// 2 bytes char
+	address += EEPROM_writeAnything(address, cold_threshold);		// 2 bytes unsigned int
+	address += EEPROM_writeAnything(address, cranking_dur);			// 2 bytes unsigned int		TOTAL: 8 of 16
+	Serial.println("saved params to EE.");
+}
+char loadMapFromEE()
 {
 	// eeprom addresses: 0 = n_air, n_rpm
-	unsigned int address, map_size, value;
-	address = 0;
+	unsigned int address, value;
+	address = MAP_EE_ADR; //XXX
 
-	address += EEPROM_readAnything(address, value);
+	address += EEPROM_readAnything(address, value);				// 2 bytes
 	if (!assignIfBetween(value, n_air, MAX_MAP_SIZE, MIN_MAP_SIZE, "n_air"))
-		return;
+	{
+		detachInterrupt(4);
+		return 0;
+	}
 
-	address += EEPROM_readAnything(address, value);
+	address += EEPROM_readAnything(address, value);				// 2 bytes
 	if (!assignIfBetween(value, n_rpm, MAX_MAP_SIZE, MIN_MAP_SIZE, "n_rpm"))
-		return;
+	{
+		detachInterrupt(4);
+		return 0;
+	}
 
-	address += EEPROM_readAnything(address, air_gridline);
-	address += EEPROM_readAnything(address, rpm_gridline);
-	address += EEPROM_readAnything(address, engine_map);
-	Serial.println("map loaded from EE");
-
+	address += EEPROM_readAnything(address, air_gridline);		// 20 bytes
+	address += EEPROM_readAnything(address, rpm_gridline);		// 20 bytes
+	address += EEPROM_readAnything(address, engine_map);		// 200 bytes  TOTAL: 244 of 496
+	Serial.println("loaded map from EE.");
+	return 1;
 }
 void saveMapToEE()
 {
 	// eeprom addresses: 0 = n_air, n_rpm
 	unsigned int address, map_size;
-	address = 0;
+	address = MAP_EE_ADR;
 
 	address += EEPROM_writeAnything(address, n_air);
 	address += EEPROM_writeAnything(address, n_rpm);
 	address += EEPROM_writeAnything(address, air_gridline);
 	address += EEPROM_writeAnything(address, rpm_gridline);
 	address += EEPROM_writeAnything(address, engine_map);
+
 	Serial.println("saved map to EE");
 }
+char loadOffsetsFromEE()
+{
+	unsigned int address;
+	address = OFFSET_EE_ADR;
+
+	address += EEPROM_readAnything(address, global_offset);
+	address += EEPROM_readAnything(address, correction_map);
+	return 1;
+}
+void saveOffsetsToEE()
+{
+	unsigned int address;
+	address = OFFSET_EE_ADR;
+
+	address += EEPROM_writeAnything(address, global_offset);
+	address += EEPROM_writeAnything(address, correction_map);
+	Serial.println("offsets saved.");
+}
+
 char assignIfBetween(const unsigned int source, unsigned int &destination, unsigned int max, unsigned int min, char var_name[])
 {
 	if ((source > MAX_MAP_SIZE) || (source < MIN_MAP_SIZE))
@@ -322,7 +480,6 @@ char assignIfBetween(const unsigned int source, unsigned int &destination, unsig
 	destination = source;
 	return 1;
 }
-
 
 // Sensor reading functions
 void readAirFlow()
@@ -375,10 +532,17 @@ void calcRPM()
 	rpm = 15000000 / tach_period;
 }
 
+// Pulse duration business
 void updateInjDuration()
 {
 	static int new_inj_duration, accel_offset, cold_eng_offset, air_temp_offset;
 
+	if (digitalRead(cranking_pin))
+	{
+		cold_eng_offset = adjustForColdEngine(cranking_dur, coolant_temp);
+		inj_duration = cranking_dur + cold_eng_offset;
+		return;
+	}
 	if (areWeCoasting(rpm, air_flow))
 	{
 		inj_duration = 0;
@@ -390,7 +554,7 @@ void updateInjDuration()
 	
 	// adjust for stuff
 	accel_offset = adjustForSuddenAccel(air_flow);		// these should not be order dependent.  
-	cold_eng_offset = adjustForColdEngine(new_inj_duration, coolant_temp, air_flow);
+	cold_eng_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
 	air_temp_offset = adjustForAirTemp(new_inj_duration, air_temp);
 
 	new_inj_duration = new_inj_duration + accel_offset + cold_eng_offset + air_temp_offset;
@@ -398,7 +562,36 @@ void updateInjDuration()
 	// output that shit
 	inj_duration = new_inj_duration;
 }
+int adjustForSuddenAccel(int air_flow)
+{
+	return 0;
+}
+int adjustForColdEngine(int nominal_duration, int coolant_temp)
+{
+	unsigned int adjustment;
+	// calculates a positive offset as a percentage of nominal injector duration. 
+	// % increase depends linearly on coolant temperature.  
+	// takes a threshold temp and a rate (mx +b) for linear dependence on  coolant temperature
 
+	if (coolant_temp >= cold_threshold)		// is engine already warm? 
+		return 0;
+	adjustment = (cold_eng_enrich_rate * nominal_duration) >> 9;	// nominal * rate/128  result between 10 and 80
+	adjustment = (adjustment * (cold_threshold - coolant_temp)) >> 4;	// result below 1000
+	return adjustment;	// adjustment;		XXX
+}
+int adjustForAirTemp(int nominal_duration, int air_temp)
+{
+	return 0;
+}
+char areWeCoasting(unsigned int rpm, unsigned char air_flow)
+{
+	if (air_flow < 80)
+		return digitalRead(idl_full_pin);
+	else
+		return 0;
+}
+
+// map interpolation
 unsigned int interpolateMap(unsigned int rpm, unsigned char air)
 {
 	int i_air, i_rpm;
@@ -409,16 +602,19 @@ unsigned int interpolateMap(unsigned int rpm, unsigned char air)
 	// check if both i's are -1 (key was higher than all array elements)
 	// check if any of them are 0 (key was lower than lowest element)
 	// handle those cases
-	
+	//Serial.print("r");
+	//Serial.print(i_rpm);
+	//Serial.print("a");
+	//Serial.println(i_air);
 
 	if (i_air > 0)
 	{
 		if (i_rpm > 0)			// both rpm and air are on the map, so do bilinear interpolation
 		{
-			inj_r0a0 = engine_map[(i_rpm - 1)*n_air + i_air - 1];	 
-			inj_r0a1 = engine_map[(i_rpm - 1)*n_air + i_air];
-			inj_r1a0 = engine_map[i_rpm*n_air + i_air - 1];
-			inj_r1a1 = engine_map[i_rpm*n_air + i_air];
+			inj_r0a0 = mapPoint(i_rpm - 1, i_air - 1);
+			inj_r0a1 = mapPoint(i_rpm - 1, i_air);
+			inj_r1a0 = mapPoint(i_rpm, i_air - 1);
+			inj_r1a1 = mapPoint(i_rpm, i_air);
 
 			inj_r0ak = linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], inj_r0a0, inj_r0a1);
 			inj_r1ak = linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], inj_r1a0, inj_r1a1);
@@ -464,21 +660,20 @@ unsigned int interpolateMap(unsigned int rpm, unsigned char air)
 		}
 	}
 }
-
-unsigned int mapPoint(uint8_t i_rpm, uint8_t i_air)
+unsigned int mapPoint(char i_rpm, char i_air)
 {
-	if (i_rpm > n_rpm)
+	static int raw, local;
+	if ((i_rpm >= n_rpm) || (i_rpm < 0) || (i_air >= n_air) || (i_air < 0) )
 	{
-		Serial.println("i_rpm out of bounds");
+		//Serial.print("ir: ");
+		//Serial.print(int(i_rpm));
+		//Serial.print("   ia: ");
+		//Serial.println(int(i_air));
 		return 0;
 	}
-	if (i_air > n_air)
-	{
-		Serial.println("i_air out of bounds");
-		return 0;
-	}
-
-	return engine_map[i_rpm * n_air + i_air];
+	raw = engine_map[i_rpm * n_air + i_air];
+	local = correction_map[i_rpm * n_air + i_air];
+	return (raw + local + global_offset);
 }
 int linearInterp(int x_key, int x1, int x2, int y1, int y2)
 {
@@ -490,7 +685,7 @@ int linearInterp(int x_key, int x1, int x2, int y1, int y2)
 
 	return y1 + (Dy*dx)/Dx;
 }
-int findIndexJustAbove(unsigned int array[], int key, int length)
+char findIndexJustAbove(unsigned int array[], int key, int length)
 {		// assumes the input array is sorted high to low. 
 	int i;
 	for (i = 0; i < length; i++)
@@ -502,72 +697,59 @@ int findIndexJustAbove(unsigned int array[], int key, int length)
 	return -1;
 }
 
-int adjustForSuddenAccel( int air_flow )
+// map modification
+void localOffset(long offset)
 {
-	return 0;
-}
-int adjustForColdEngine( int nominal_duration, int coolant_temp, int air_flow)
-{
-	static unsigned int adjustment;
-	// applies a positive offset to injector duration.  
-	// offset depends linearly on coolant temperature.  
-	// offset depends linearly on injector duration (works like a % of normal)
-	// Parameters: 
-	// takes a threshold temp and a rate (mx +b) for linear dependence on  coolant temperature
+	// here, we apply an offset to the map correction in the locale of our current operation (air_flow and rpm) 
+	char i_air, i_rpm, d_rpm, d_air;
+	long dz_r0, dz_r1;
+	int dz_r0a0, dz_r0a1, dz_r1a0, dz_r1a1;
+	
+	// find the location on the map.
+	i_air = findIndexJustAbove(air_gridline, air_flow, n_air);
+	i_rpm = findIndexJustAbove(rpm_gridline, rpm, n_rpm);
 
-	if (coolant_temp >= cold_threshold)		// is engine already warm? 
-		return 0; 
-	adjustment = cold_eng_enrich_rate * (cold_threshold - coolant_temp) * nominal_duration;
-	adjustment >>= 6;			// divide by 64; 
-	return 0;	// adjustment;		XXX
-}
-int adjustForAirTemp(int nominal_duration, int air_temp)
-{
-	return 0;
-}
-char areWeCoasting( unsigned int rpm, unsigned char air_flow )
-{
-	if (air_flow < 80)
-		return digitalRead(idl_full_pin);
-	else
-		return 0;
-}
+	if ((i_air <= 0) || (i_rpm <= 0))		// if we're not operating on the map, fuggedaboutit
+		return;
 
-// Array functions
-void addArrays(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
-{
-	unsigned int i;
+	d_rpm = rpm_gridline[i_rpm - 1] - rpm_gridline[i_rpm];
+	d_air = air_gridline[i_air - 1] - air_gridline[i_air];
 
-	for (i = 0; i < n; i++)
-		destination_array[i] += source_array[i];
+	// this gets divided into 4 locations. 
+		
+	dz_r0 = (offset * (rpm - rpm_gridline[i_rpm])) / d_rpm;
+	dz_r1 = offset - dz_r0;
+
+	dz_r0a0 = (dz_r0 * (air_flow - air_gridline[i_air])) / d_air;
+	dz_r0a1 = dz_r0 - dz_r0a0;
+
+	dz_r1a0 = (dz_r1 * (air_flow - air_gridline[i_air])) / d_air;
+	dz_r1a1 = dz_r1 - dz_r1a0;
+
+
+	editMapPoint(i_rpm - 1, i_air - 1,	dz_r0a0);
+	editMapPoint(i_rpm - 1, i_air,		dz_r0a1);
+	editMapPoint(i_rpm,		i_air - 1,	dz_r1a0);
+	editMapPoint(i_rpm,		i_air,		dz_r1a1);
 }
-void copyArray(unsigned int source_array[], unsigned int destination_array[], unsigned int n)
+void editMapPoint(char i_rpm, char i_air, int offset)
 {
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
+	if ((i_rpm >= n_rpm) || (i_rpm < 0) || (i_air >= n_air) || (i_air < 0))
 	{
-		destination_array[i] = source_array[i];
+		Serial.println("index out of bounds");
+		return;
 	}
+	correction_map[n_air*i_rpm + i_air] += offset; 
 }
 
-void Delay_Ms(unsigned int d) {
-	unsigned int  i, k;
-	for (i = 0; i<d; i++)
-	{
-		for (k = 0; k<2000; k++)
-		{
-			asm volatile ("NOP");
-		}
-
-	}
-}
+// simple stuff
 void toggle(unsigned char pin) 
 {
 	// Toggle LED
 	digitalWrite(pin, digitalRead(pin) ^ 1);
 }
 
+// interrupt routines
 ISR( TIMER1_CAPT_vect )
 {
 	sei();
@@ -619,4 +801,3 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 	PORTL &= 0x55;				// 0b01010101; 
 	//PORTG &= ~PG1;
 }
-
