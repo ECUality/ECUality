@@ -9,20 +9,41 @@
 #define OFFSET_EE_ADR	512
 
 // Pin mappings
-const char air_flow_pin = A12;
-const char air_temp_pin = A14;
-const char o2_pin = A9;
-const char coolant_temp_pin = A13;
-const char oil_pressure_pin = A11;
-const char tach_pin = 19;
-const char idl_full_pin = A10;
+const uint8_t air_flow_pin = A12;
+const uint8_t air_temp_pin = A14;
+const uint8_t o2_pin = A9;
+const uint8_t coolant_temp_pin = A13;
+const uint8_t oil_pressure_pin = A11;
+const uint8_t tach_pin = 19;
+const uint8_t idl_full_pin = A10;
+const uint8_t cranking_pin = 10;
 
-const char inj1_pin = 42;
-const char inj2_pin = 44;
-const char inj3_pin = 46;
-const char inj4_pin = 48;
+const uint8_t inputs[] = { air_flow_pin, air_temp_pin, o2_pin, coolant_temp_pin, oil_pressure_pin, tach_pin,
+	idl_full_pin, cranking_pin, '\0'};
 
-const char cranking_pin = 10;
+// Output pins
+const uint8_t inj2_pin = 42;
+const uint8_t inj3_pin = 44;
+const uint8_t inj4_pin = 46;
+const uint8_t inj1_pin = 48;
+
+const uint8_t coil1_pin = 28;
+const uint8_t coil2_pin = 26;
+const uint8_t coil3_pin = 24;
+const uint8_t coil4_pin = 22;
+
+const uint8_t fuel_pin = A8;
+const uint8_t drv_en_pin = 39;
+const uint8_t o2_pwr_pin = A1;
+const uint8_t cs_knock = 9;
+const uint8_t cs_sd = 12;
+const uint8_t cs_inj = 36;
+const uint8_t inj_led = 25;
+
+uint8_t outputs[] = { inj1_pin, inj2_pin, inj3_pin, inj4_pin, 
+	coil1_pin, coil2_pin, coil3_pin, coil4_pin,
+	fuel_pin, drv_en_pin, o2_pwr_pin, 
+	cs_knock, cs_sd, cs_inj, inj_led, '\0'};
 
 
 #define MAX_MAP_SIZE	10U
@@ -30,13 +51,14 @@ const char cranking_pin = 10;
 
 extern int inspect[5] = {};
 
-
 // alternate paramater data structure
-const unsigned char n_params = 4;
-unsigned int params[n_params] = {0};
-char *param_names[] = { "air_stabilize_rate", "cold_eng_enrich_rate", "cold_threshold", "cranking_dur" };
+//const unsigned char n_params = 4;
+//unsigned int params[n_params] = {0};
+//char *param_names[] = { "air_stabilize_rate", "cold_eng_enrich_rate", "cold_threshold", "cranking_dur" };
 
 // operating control variables
+char good_ee_loads;
+
 unsigned int air_stabilize_rate;		// the rate at which accelerator pump transient decays.
 unsigned int cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
 unsigned int cold_threshold;			// the temperature below which enrichment kicks in. 
@@ -64,34 +86,37 @@ int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
 int global_offset; 
 
- 
-void setup() 
+ //////////////////// pogram ///////////////////
+void setup()
 {
-	char good_ee_loads = 1;
-
 	Serial.begin(115200);
-	
+
 	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
 	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
 	task[2] = calcRPM;				ms_freq_of_task[2] = 50;
-	task[3] = updateInjDuration;	ms_freq_of_task[3] = 50;
-	task[4] = readAirTemp;			ms_freq_of_task[4] = 250;
-	task[5] = readOilPressure;		ms_freq_of_task[5] = 250;
-	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
-	n_tasks = 7;
-	
-	// input interrupt pin
-	pinMode(tach_pin, INPUT);					// This gets attached to an interrupt
-	pinMode(cranking_pin, INPUT);
+	task[3] = calcInjDuration;		ms_freq_of_task[3] = 50;
+	task[4] = updateInjectors;		ms_freq_of_task[4] = 50;
+	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
+	task[6] = readOilPressure;		ms_freq_of_task[6] = 250;
+	task[7] = readCoolantTemp;		ms_freq_of_task[7] = 250;
+	n_tasks = 8;
 
-	pinMode(inj1_pin, OUTPUT);
-	pinMode(inj2_pin, OUTPUT);
-	pinMode(inj3_pin, OUTPUT);
-	pinMode(inj4_pin, OUTPUT);
-	pinMode(13, OUTPUT);
+	// input interrupt pin
+	digitalWrite(cs_knock, HIGH);
+	digitalWrite(cs_inj, HIGH);
+	digitalWrite(cs_sd, HIGH);
+
+	setPinModes(inputs, INPUT);
+	setPinModes(outputs, OUTPUT);
+	pinMode(40, INPUT);		// the other hooked-up inj1_pin. 
+	//pinMode(drv_en_pin, OUTPUT);
+
+	//pinMode(coil1_pin,)
+	//pinMode(13, OUTPUT);
 
 	inj_duration = 5;
 
+	good_ee_loads = 1;
 	good_ee_loads &= loadParamsFromEE();
 	good_ee_loads &= loadMapFromEE();
 	good_ee_loads &= loadOffsetsFromEE();
@@ -107,7 +132,7 @@ void setup()
 	// Configure Timer3 for measuring injector pulse duration (using interrupt)
 	TCCR3A = 0;							// clear control register A 
 	TCCR3B = _BV(CS31) | _BV(CS30);		// start the timer at clk/64 prescale. 
-	
+
 	TIMSK3 |= _BV(OCIE3A);				// enable output compare A interrupt on timer 3
 
 	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
@@ -119,22 +144,31 @@ void setup()
 	// COM0A<1:0>	= 2 (10)	clears OC0A on compare match so OCR0A represents "high" time. 
 	// COM0B<1:0>	= 2 (10)	same as A.
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
-	if (good_ee_loads)
-		attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
-	else
-		Serial.println("Error loading EEPROM data.  Injectors stopped");
+
+	attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
 }
+void setPinModes(const uint8_t pins[], const uint8_t direction)
+{
+	char i = 0;
+	while (1)
+	{
+		if (pins[i] == '\0')
+			return;
+		pinMode(pins[i], direction);
+		++i;
+	}
+}
+
 void loop()
 {
 	Poll_Serial();
 }
 
-
 // Serial functions
 void Poll_Serial()
 {
 	static char c[10];
-	static unsigned int receivedNum;
+	static int gain;
 
 	if (!Serial.available())
 		return;
@@ -176,33 +210,27 @@ void Poll_Serial()
 		reportArray("Task runtimes in us: ", task_runtime, n_tasks);
 		break;
 
-	case'n':					// report n_rpm and n_air
-		Serial.print("n_rpm: ");
-		Serial.print(n_rpm);
-		Serial.print("   n_air: ");
-		Serial.println(n_air);
-		break;
-
 	case 'o':
 		reportOffsets();
+		break;
 
 	case 'L':					// increase fuel locally
-		localOffset(16);	
+		localOffset(getGain());
 		Serial.print(".");
 		break;
 
 	case 'l':					// decrease fuel locally 
-		localOffset(-16);
+		localOffset(-getGain());
 		Serial.print(".");
 		break;
 
 	case 'G':					// increase fuel globally 
-		global_offset += 16;
+		global_offset += getGain();
 		Serial.print(".");
 		break;
 
 	case 'g':					// decrease fuel globally
-		global_offset -= 16; 
+		global_offset -= getGain();
 		Serial.print(".");
 		break;
 
@@ -237,11 +265,13 @@ void Poll_Serial()
 		saveOffsetsToEE();
 		break;
 
-	case 'T':
-		inspect[0] = 3;
-		EEPROM_writeAnything(0, inspect[0]);
-		EEPROM_readAnything(0, inspect[0]);
-		Serial.println(inspect[0]);
+	case '+':
+		disableDrive();
+		break;
+
+	case '-':
+		enableDrive();
+		break;
 
 	default:
 		Serial.println("no comprendo");
@@ -252,6 +282,14 @@ void dumpLine(void)
 {
 	char str[5];
 	while (Serial.readBytesUntil('\n', str, 4));
+}
+int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
+{
+	int gain = 1; 
+	char c[10];
+	gain += Serial.readBytesUntil('\n', &c[1], 9);
+	gain <<= 4;		// multiply by 16
+	return gain;
 }
 
 // Serial to data functions
@@ -533,7 +571,7 @@ void calcRPM()
 }
 
 // Pulse duration business
-void updateInjDuration()
+void calcInjDuration()
 {
 	static int new_inj_duration, accel_offset, cold_eng_offset, air_temp_offset;
 
@@ -585,10 +623,14 @@ int adjustForAirTemp(int nominal_duration, int air_temp)
 }
 char areWeCoasting(unsigned int rpm, unsigned char air_flow)
 {
-	if (air_flow < 80)
-		return digitalRead(idl_full_pin);
+	return (!digitalRead(idl_full_pin) && (air_flow < 80) && (rpm > 1200) );
+}
+void updateInjectors()
+{
+	if (inj_duration > 10)
+		OCR3A = inj_duration;		// normal operation
 	else
-		return 0;
+		OCR3A = 10;					// if inj_duration = 0, we just drop it. 
 }
 
 // map interpolation
@@ -701,10 +743,10 @@ char findIndexJustAbove(unsigned int array[], int key, int length)
 void localOffset(long offset)
 {
 	// here, we apply an offset to the map correction in the locale of our current operation (air_flow and rpm) 
-	char i_air, i_rpm, d_rpm, d_air;
+	char i_air, i_rpm, d_rpm, d_air, gain;
 	long dz_r0, dz_r1;
 	int dz_r0a0, dz_r0a1, dz_r1a0, dz_r1a1;
-	
+		
 	// find the location on the map.
 	i_air = findIndexJustAbove(air_gridline, air_flow, n_air);
 	i_rpm = findIndexJustAbove(rpm_gridline, rpm, n_rpm);
@@ -742,6 +784,27 @@ void editMapPoint(char i_rpm, char i_air, int offset)
 	correction_map[n_air*i_rpm + i_air] += offset; 
 }
 
+// important commands
+void enableDrive()
+{
+	if (good_ee_loads)
+	{
+		digitalWrite(fuel_pin, HIGH);
+		digitalWrite(drv_en_pin, LOW);
+		//attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+		Serial.println("Armed.");
+	}
+	else
+		Serial.println("bad EE data, no go.");
+}
+void disableDrive()
+{
+	digitalWrite(fuel_pin, LOW);
+	digitalWrite(drv_en_pin, HIGH);		// this turns off the injectors and ignition
+	//detachInterrupt(4);
+	Serial.println("inj, fuel disabled.");
+}
+
 // simple stuff
 void toggle(unsigned char pin) 
 {
@@ -776,28 +839,27 @@ ISR( TIMER1_CAPT_vect )
 }
 void isrTachRisingEdge()
 {
-	static char pulse_divider = 0;
+	static char pulse_divider = 0;	// the actions happen every other pulse.  We use pulse_divider for that.
 	if (!pulse_divider)
 	{
 		GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
 		tach_period = TCNT3; 		// record the timer setting 
 		TCNT3 = 0;					// start the timer over. 
 
-		// update the injector turn off timing. 
-		OCR3A = inj_duration;
-
 		// set all injectors high (in same instruction)
-		PORTL |= 0xAA;				// 0b10101010;
+		if (inj_duration)
+		{
+			PORTL |= 0xAA;				// 0b10101010;
+			PORTA |= 0x08;				// 0b00001000  (A3 is turned on) 
+		}
 		pulse_divider = 1;
 	}
 	else
 		--pulse_divider;
-
-	//PORTG |= PG1;				// this can be dropped if I move a pin over
 }
 ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A. 
 {
 	// set all injectors low (in same instruction)
-	PORTL &= 0x55;				// 0b01010101; 
-	//PORTG &= ~PG1;
+	PORTL &= ~0xAA;			// 0b01010101; 
+	PORTA &= ~0x08;				// 
 }
