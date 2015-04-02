@@ -37,7 +37,7 @@ const uint8_t coil3_pin = 24;
 const uint8_t coil4_pin = 22;
 
 const uint8_t fuel_pin = A8;
-const uint8_t drv_en_pin = 39;
+const uint8_t drv_en_pin = 38;
 const uint8_t o2_pwr_pin = A1;
 const uint8_t cs_knock = 9;
 const uint8_t cs_sd = 12;
@@ -65,10 +65,10 @@ unsigned int cold_threshold;			// the temperature below which enrichment kicks i
 unsigned int cranking_dur;				// the constant duration that gets sent while cranking (500 - 2000) 
 
 // task variables
-unsigned int ms_freq_of_task[10];
-unsigned int task_runtime[10];
-unsigned int ms_since_last_task[10] = { 0 };
-void(*task[10]) (void);
+unsigned int ms_freq_of_task[20];
+unsigned int task_runtime[20];
+unsigned int ms_since_last_task[20] = { 0 };
+void(*task[20]) (void);
 unsigned char n_tasks;
 
 // sensor input variables
@@ -105,9 +105,10 @@ void setup()
 	task[3] = calcInjDuration;		ms_freq_of_task[3] = 50;
 	task[4] = updateInjectors;		ms_freq_of_task[4] = 50;
 	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
-	task[6] = readOilPressure;		ms_freq_of_task[6] = 250;
-	task[7] = readCoolantTemp;		ms_freq_of_task[7] = 250;
-	n_tasks = 8;
+	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
+	task[7] = readOilPressure;		ms_freq_of_task[7] = 250;
+	task[8] = statusReport;			ms_freq_of_task[8] = 250;
+	n_tasks = 9;
 
 	// input interrupt pin
 	digitalWrite(cs_knock, HIGH);
@@ -313,6 +314,14 @@ int getGain()		// this is just the number of characters before the newline '\n' 
 	gain += Serial.readBytesUntil('\n', &c[1], 9);
 	gain <<= 4;		// multiply by 16
 	return gain;
+}
+void statusReport()
+{
+	if (digitalRead(cranking_pin))
+	{
+		Serial.print(" ");
+		Serial.print(inj_duration);
+	}
 }
 
 // Serial to data functions
