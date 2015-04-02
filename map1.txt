@@ -10,4 +10,11 @@ Map 8 8 								air:	220	180	140	100	80	60	40	20	rpm:	5000	3589	2589	1863	1341	9
 
 
 
-P air_stabilize_rate: 20   cold_eng_enrich_rate: 8   cold_threshold: 500   cranking_dur:  1000
+P
+air stabilize rate:	20
+cold threshold:		140
+cranking dur:		1000
+choke scale temps:	160	100	50	10
+choke scale values: 	20	200	700	1024
+
+

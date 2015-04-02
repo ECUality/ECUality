@@ -29,7 +29,7 @@ void addArrays(T source_array[], T destination_array[], unsigned int n)
 }
 
 template <typename T>
-void copyArray(T source_array[], T destination_array[], unsigned int n)
+void copyArray(const T source_array[], T destination_array[], const unsigned int n)
 {
 	unsigned int i;
 

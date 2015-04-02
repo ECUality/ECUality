@@ -5,8 +5,12 @@
 #include "ECUality.h"
 
 #define PARAM_EE_ADR	0
-#define MAP_EE_ADR		16
-#define OFFSET_EE_ADR	512
+#define MAP_EE_ADR		100
+#define OFFSET_EE_ADR	600
+
+#define MAX_MAP_SIZE	10U
+#define MIN_MAP_SIZE	3U
+#define N_CHOKE_SCALE	4U
 
 // Pin mappings
 const uint8_t air_flow_pin = A12;
@@ -46,23 +50,19 @@ uint8_t outputs[] = { inj1_pin, inj2_pin, inj3_pin, inj4_pin,
 	cs_knock, cs_sd, cs_inj, inj_led, '\0'};
 
 
-#define MAX_MAP_SIZE	10U
-#define MIN_MAP_SIZE	3U
-
 extern int inspect[5] = {};
 
 // alternate paramater data structure
 //const unsigned char n_params = 4;
 //unsigned int params[n_params] = {0};
-//char *param_names[] = { "air_stabilize_rate", "cold_eng_enrich_rate", "cold_threshold", "cranking_dur" };
+//char *param_names[] = { "air_stabilize_rate", "choke_rate", "cold_threshold", "cranking_dur" };
 
 // operating control variables
 char good_ee_loads;
 
 unsigned int air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-unsigned int cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
-unsigned int cold_threshold;			// the temperature below which enrichment kicks in. 
-unsigned int cranking_dur;				// the constant duration that gets sent while cranking
+unsigned int cold_threshold;			// the temperature below which enrichment kicks in.  (100F to 150F)
+unsigned int cranking_dur;				// the constant duration that gets sent while cranking (500 - 2000) 
 
 // task variables
 unsigned int ms_freq_of_task[10];
@@ -75,12 +75,20 @@ unsigned char n_tasks;
 int air_flow, rpm, o2, air_temp, coolant_temp, oil_pressure;
 unsigned int tach_period, inj_duration;
 
+const int temp_scale_x[] = { 563, 454, 356, 278, 208, 157, 116, 88, 66, 52, 41};
+const int temp_scale_z[] = {32, 50, 68, 86, 104, 122, 140, 158, 176, 194, 212};
+const char n_temp_scale = 11;
+
+int choke_scale_x[] = { 150, 100, 50, 20 };
+int choke_scale_z[] = { 20, 200, 700, 1000 };	// these are actually fractions z/1024
+
+
 // variables that capture dynamic aspects of sensor input
 int air_flow_d, air_flow_snap, o2_d;
 
 // map variables
 unsigned int n_air, n_rpm;
-unsigned int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
+int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
 int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
@@ -180,13 +188,28 @@ void Poll_Serial()
 	switch (c[0])
 	{
 	case 'a':					// report air flow
-		Serial.print("Air flow: ");
+		Serial.print("air flow: ");
 		Serial.println(air_flow);
 		break;
 
 	case 'r':					// report rpm
 		Serial.print("rpm: ");
 		Serial.println(rpm);
+		break;
+
+	case 'o':					// report O2 signal
+		Serial.print("O2: ");
+		Serial.println(o2);
+		break;
+
+	case 't':					// report O2 signal
+		Serial.print("coolant temp: ");
+		Serial.println(coolant_temp);
+		break;
+
+	case 'q':					// report O2 signal
+		Serial.print("air temp: ");
+		Serial.println(air_temp);
 		break;
 
 	case'p':					// preport params
@@ -206,11 +229,11 @@ void Poll_Serial()
 		reportArray("inspect array", inspect, 5);
 		break;
 
-	case 't':					// report task runtimes
+	case 'z':					// report task runtimes
 		reportArray("Task runtimes in us: ", task_runtime, n_tasks);
 		break;
 
-	case 'o':
+	case 'x':
 		reportOffsets();
 		break;
 
@@ -297,8 +320,8 @@ char receiveMap()
 {
 	char str[3] = "";	// all zeros.
 	int new_engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-	unsigned int new_air_gridline[MAX_MAP_SIZE];
-	unsigned int new_rpm_gridline[MAX_MAP_SIZE];
+	int new_air_gridline[MAX_MAP_SIZE];
+	int new_rpm_gridline[MAX_MAP_SIZE];
 	unsigned int new_n_air, new_n_rpm;
 	unsigned int new_map_size;
 
@@ -353,25 +376,31 @@ char receiveParams()
 	char str[3] = "";	// all zeros.
 
 	unsigned int new_air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-	unsigned int new_cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
 	unsigned int new_cold_threshold;			// the temperature below which enrichment kicks in. 
 	unsigned int new_cranking_dur;				// the constant duration that gets sent while cranking
+	int new_choke_scale_x[N_CHOKE_SCALE];
+	int new_choke_scale_z[N_CHOKE_SCALE];
+
 
 	//receiveArray(params, n_params, "param array");
 
 	if (!receiveNumberBetween(&new_air_stabilize_rate, 0, 200, "air_stabilize_rate"))
 		return-1;
-	if (!receiveNumberBetween(&new_cold_eng_enrich_rate, 1, 16, "cold_eng_enrich_rate"))
-		return-1;
-	if (!receiveNumberBetween(&new_cold_threshold, 200, 800, "cold_threshold"))
+	if (!receiveNumberBetween(&new_cold_threshold, 90, 195, "cold_threshold"))
 		return-1;
 	if (!receiveNumberBetween(&new_cranking_dur, 500, 2000, "cranking_dur"))
 		return-1;
 
+	if (!receiveArray(new_choke_scale_x, N_CHOKE_SCALE, "choke_scale_x"))
+		return -1;
+	if (!receiveArray(new_choke_scale_z, N_CHOKE_SCALE, "choke_scale_z"))
+		return -1;
+
 	air_stabilize_rate = new_air_stabilize_rate;
-	cold_eng_enrich_rate = new_cold_eng_enrich_rate;
 	cold_threshold = new_cold_threshold;
 	cranking_dur = new_cranking_dur;
+	copyArray(new_choke_scale_x, choke_scale_x, N_CHOKE_SCALE);
+	copyArray(new_choke_scale_z, choke_scale_z, N_CHOKE_SCALE);
 
 	dumpLine();			// dump any additional characters. 
 	reportParams();
@@ -380,12 +409,14 @@ void reportParams()
 {
 	Serial.print("air_stabilize_rate: ");
 	Serial.print(air_stabilize_rate);
-	Serial.print("   cold_eng_enrich_rate: ");
-	Serial.print(cold_eng_enrich_rate);
 	Serial.print("   cold_threshold: ");
 	Serial.print(cold_threshold);
 	Serial.print("   cranking_dur: ");
 	Serial.println(cranking_dur);
+
+	reportArray("choke scale Temps:  ", choke_scale_x, N_CHOKE_SCALE);
+	reportArray("choke scale values: ", choke_scale_z, N_CHOKE_SCALE);
+
 }
 void reportOffsets()
 {
@@ -407,22 +438,25 @@ char loadParamsFromEE()
 	unsigned int address;
 	address = PARAM_EE_ADR;
 
-	char good = 1;
 	unsigned int new_air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-	unsigned int new_cold_eng_enrich_rate;		// how aggressive the enrichment is with respect to temperature. (0 - 16) 
 	unsigned int new_cold_threshold;			// the temperature below which enrichment kicks in. 
 	unsigned int new_cranking_dur;				// the constant duration that gets sent while cranking
+	int new_choke_scale_x[N_CHOKE_SCALE];
+	int new_choke_scale_z[N_CHOKE_SCALE];
 
-	address += EEPROM_readAnything(address, new_air_stabilize_rate);	// 1 bytes unsigned char
-	address += EEPROM_readAnything(address, new_cold_eng_enrich_rate);	// 1 bytes char
+	address += EEPROM_readAnything(address, new_air_stabilize_rate);	// 2 bytes unsigned int
 	address += EEPROM_readAnything(address, new_cold_threshold);		// 2 bytes unsigned int
-	address += EEPROM_readAnything(address, new_cranking_dur);			// 2 bytes unsigned int		TOTAL: 6 of 16
+	address += EEPROM_readAnything(address, new_cranking_dur);			// 2 bytes unsigned int	
+	address += EEPROM_readAnything(address, new_choke_scale_x);				// 8 bytes int x4
+	address += EEPROM_readAnything(address, new_choke_scale_z);				// 8 bytes int x4		TOTAL: 22 of 32
 
+	char good = 1;
 	good = good && (new_air_stabilize_rate >= 0) && (new_air_stabilize_rate <= 100);
-	good = good && (new_cold_eng_enrich_rate >= 1) && (new_cold_eng_enrich_rate <= 16);
-	good = good && (new_cold_threshold >= 200) && (new_cold_threshold <= 800);
-	good = good && (new_cranking_dur >= 500) && (new_cranking_dur <= 1024);
-
+	good = good && (new_cold_threshold >= 90) && (new_cold_threshold <= 195);
+	good = good && (new_cranking_dur >= 500) && (new_cranking_dur <= 2000);
+	good = good && (new_choke_scale_x[0] >= new_cold_threshold) && (new_choke_scale_x[0] <= 230);
+	good = good && (new_choke_scale_z[N_CHOKE_SCALE - 1] >= 200) && (new_choke_scale_z[N_CHOKE_SCALE - 1] <= 2000);
+	
 	if (!good)
 	{
 		Serial.println("invalid parameter.");
@@ -430,9 +464,10 @@ char loadParamsFromEE()
 	}
 
 	air_stabilize_rate = new_air_stabilize_rate;
-	cold_eng_enrich_rate = new_cold_eng_enrich_rate;
 	cold_threshold = new_cold_threshold;
 	cranking_dur = new_cranking_dur;
+	copyArray(new_choke_scale_x, choke_scale_x, N_CHOKE_SCALE);
+	copyArray(new_choke_scale_z, choke_scale_z, N_CHOKE_SCALE);
 
 	Serial.println("loaded params from EE.");
 	return 1;
@@ -443,9 +478,10 @@ void saveParamsToEE()
 	address = PARAM_EE_ADR;
 
 	address += EEPROM_writeAnything(address, air_stabilize_rate);	// 2 bytes unsigned char
-	address += EEPROM_writeAnything(address, cold_eng_enrich_rate);	// 2 bytes char
 	address += EEPROM_writeAnything(address, cold_threshold);		// 2 bytes unsigned int
-	address += EEPROM_writeAnything(address, cranking_dur);			// 2 bytes unsigned int		TOTAL: 8 of 16
+	address += EEPROM_writeAnything(address, cranking_dur);			// 2 bytes unsigned int	
+	address += EEPROM_writeAnything(address, choke_scale_x);		// 8 bytes int x4
+	address += EEPROM_writeAnything(address, choke_scale_z);		// 8 bytes int x4		TOTAL: 22 of 32
 	Serial.println("saved params to EE.");
 }
 char loadMapFromEE()
@@ -542,17 +578,20 @@ void readAirFlow()
 }
 void readO2Sensor()
 {
-	o2_d = -o2;
+	//o2_d = -o2;
 	o2 = analogRead(o2_pin);		// this takes 100us.  Should shorten
-	o2_d += o2;
+	o2 *= 5; 
+	//o2_d += o2;
 }
 void readAirTemp() 
 {
 	air_temp = analogRead(air_temp_pin);
+	air_temp = scaleRead(air_temp, temp_scale_x, temp_scale_z, n_temp_scale);
 }
 void readCoolantTemp() 
 {
 	coolant_temp = analogRead(coolant_temp_pin);
+	coolant_temp = scaleRead(coolant_temp, temp_scale_x, temp_scale_z, n_temp_scale);
 }
 void readOilPressure()
 {
@@ -573,12 +612,13 @@ void calcRPM()
 // Pulse duration business
 void calcInjDuration()
 {
-	static int new_inj_duration, accel_offset, cold_eng_offset, air_temp_offset;
+	static unsigned int new_inj_duration;
+	static int accel_offset, choke_offset, air_temp_offset;
 
 	if (digitalRead(cranking_pin))
 	{
-		cold_eng_offset = adjustForColdEngine(cranking_dur, coolant_temp);
-		inj_duration = cranking_dur + cold_eng_offset;
+		choke_offset = adjustForColdEngine(cranking_dur, coolant_temp);
+		inj_duration = cranking_dur + choke_offset;
 		return;
 	}
 	if (areWeCoasting(rpm, air_flow))
@@ -592,10 +632,10 @@ void calcInjDuration()
 	
 	// adjust for stuff
 	accel_offset = adjustForSuddenAccel(air_flow);		// these should not be order dependent.  
-	cold_eng_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
+	choke_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
 	air_temp_offset = adjustForAirTemp(new_inj_duration, air_temp);
 
-	new_inj_duration = new_inj_duration + accel_offset + cold_eng_offset + air_temp_offset;
+	new_inj_duration = new_inj_duration + accel_offset + choke_offset + air_temp_offset;
 
 	// output that shit
 	inj_duration = new_inj_duration;
@@ -604,18 +644,20 @@ int adjustForSuddenAccel(int air_flow)
 {
 	return 0;
 }
-int adjustForColdEngine(int nominal_duration, int coolant_temp)
+int adjustForColdEngine(unsigned int nominal_duration, int coolant_temp)
 {
-	unsigned int adjustment;
 	// calculates a positive offset as a percentage of nominal injector duration. 
 	// % increase depends linearly on coolant temperature.  
 	// takes a threshold temp and a rate (mx +b) for linear dependence on  coolant temperature
-
+	unsigned long adjustment;
+	
 	if (coolant_temp >= cold_threshold)		// is engine already warm? 
 		return 0;
-	adjustment = (cold_eng_enrich_rate * nominal_duration) >> 9;	// nominal * rate/128  result between 10 and 80
-	adjustment = (adjustment * (cold_threshold - coolant_temp)) >> 4;	// result below 1000
-	return adjustment;	// adjustment;		XXX
+
+	adjustment = scaleRead(coolant_temp, choke_scale_x, choke_scale_z, N_CHOKE_SCALE);
+	adjustment *= nominal_duration;
+	adjustment >>= 10;		// divide by 1024
+	return int(adjustment);	// adjustment;		XXX
 }
 int adjustForAirTemp(int nominal_duration, int air_temp)
 {
@@ -631,6 +673,15 @@ void updateInjectors()
 		OCR3A = inj_duration;		// normal operation
 	else
 		OCR3A = 10;					// if inj_duration = 0, we just drop it. 
+
+	// if we just set jumped the compare register below the timer, should stop the injector 
+	// because if we don't the timer will have to wrap all the way around before it stops. 
+	if (inj_duration <= TCNT3)		
+	{
+		// turn off the injectors
+		PORTL &= ~0xAA;			// 0b01010101; 
+		PORTA &= ~0x08;				// 
+	}
 }
 
 // map interpolation
@@ -727,7 +778,7 @@ int linearInterp(int x_key, int x1, int x2, int y1, int y2)
 
 	return y1 + (Dy*dx)/Dx;
 }
-char findIndexJustAbove(unsigned int array[], int key, int length)
+char findIndexJustAbove(const int array[], int key, int length)
 {		// assumes the input array is sorted high to low. 
 	int i;
 	for (i = 0; i < length; i++)
@@ -743,7 +794,8 @@ char findIndexJustAbove(unsigned int array[], int key, int length)
 void localOffset(long offset)
 {
 	// here, we apply an offset to the map correction in the locale of our current operation (air_flow and rpm) 
-	char i_air, i_rpm, d_rpm, d_air, gain;
+	char i_air, i_rpm;
+	int D_rpm, D_air, d_rpm_lowside, d_air_rightside;
 	long dz_r0, dz_r1;
 	int dz_r0a0, dz_r0a1, dz_r1a0, dz_r1a1;
 		
@@ -752,22 +804,44 @@ void localOffset(long offset)
 	i_rpm = findIndexJustAbove(rpm_gridline, rpm, n_rpm);
 
 	if ((i_air <= 0) || (i_rpm <= 0))		// if we're not operating on the map, fuggedaboutit
-		return;
+		return;								// note: -1 means we're above, 0 means we're below so <= 0 captures both
 
-	d_rpm = rpm_gridline[i_rpm - 1] - rpm_gridline[i_rpm];
-	d_air = air_gridline[i_air - 1] - air_gridline[i_air];
+	// 	offset gets divided into 4 the 4 nearest grid intersections based on where we're currently operating. 
+	//  more of the offset goes to the intersections we're closest to. 
 
-	// this gets divided into 4 locations. 
-		
-	dz_r0 = (offset * (rpm - rpm_gridline[i_rpm])) / d_rpm;
-	dz_r1 = offset - dz_r0;
+	D_rpm = rpm_gridline[i_rpm - 1] - rpm_gridline[i_rpm];	// positive
+	D_air = air_gridline[i_air - 1] - air_gridline[i_air];	// positive
 
-	dz_r0a0 = (dz_r0 * (air_flow - air_gridline[i_air])) / d_air;
-	dz_r0a1 = dz_r0 - dz_r0a0;
+	d_rpm_lowside = rpm - rpm_gridline[i_rpm];			// delta above lower neighbors
+	d_air_rightside = air_flow - air_gridline[i_air];		// delta to left of neighbors. 
 
-	dz_r1a0 = (dz_r1 * (air_flow - air_gridline[i_air])) / d_air;
-	dz_r1a1 = dz_r1 - dz_r1a0;
+	if ((d_rpm_lowside * 2) > D_rpm)		// closer to the upper neighbors.  Use lower delta for calculations.
+	{
+		dz_r0 = (offset * d_rpm_lowside) / D_rpm;
+		dz_r1 = offset - dz_r0;
+	}
+	else									// closer to the lower neighbors.  Use upper delta for calculations.
+	{
+		dz_r1 = (offset * (D_rpm - d_rpm_lowside)) / D_rpm;
+		dz_r0 = offset - dz_r1;
+	}
 
+	if ((d_air_rightside * 2) > D_air)		// closer to the left neighbors, use right side deltas (larger) 
+	{
+		dz_r0a0 = (dz_r0 * d_air_rightside) / D_air;
+		dz_r0a1 = dz_r0 - dz_r0a0;
+
+		dz_r1a0 = (dz_r1 * d_air_rightside) / D_air;
+		dz_r1a1 = dz_r1 - dz_r1a0;
+	}
+	else									// closer to right neighbors, use left side deltas (larger) 
+	{
+		dz_r0a1 = (dz_r0 * (D_air - d_air_rightside)) / D_air;
+		dz_r0a0 = dz_r0 - dz_r0a1;
+
+		dz_r1a1 = (dz_r1 * (D_air - d_air_rightside)) / D_air;
+		dz_r1a0 = dz_r1 - dz_r1a1;
+	}
 
 	editMapPoint(i_rpm - 1, i_air - 1,	dz_r0a0);
 	editMapPoint(i_rpm - 1, i_air,		dz_r0a1);
@@ -782,6 +856,22 @@ void editMapPoint(char i_rpm, char i_air, int offset)
 		return;
 	}
 	correction_map[n_air*i_rpm + i_air] += offset; 
+}
+
+// analog reading scaling
+int scaleRead(int x, const int x_array[], const int y_array[], char n)
+{
+	char i;
+	i = findIndexJustAbove(x_array, x, n);
+
+	if (i > 0)	// reading is on the graph
+		return linearInterp(x, x_array[i-1], x_array[i], y_array[i-1], y_array[i]);
+	
+	else if (i == 0)	// x is to left of graph.  Use leftmost points
+		return linearInterp(x, x_array[0], x_array[1], y_array[0], y_array[1]);
+
+	else				// x is to right of graph. Use rightmost points.
+		return linearInterp(x, x_array[n-1], x_array[n], y_array[n-1], y_array[n]);
 }
 
 // important commands
