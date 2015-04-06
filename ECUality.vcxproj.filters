@@ -36,10 +36,13 @@
     <ClInclude Include="Interpolation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Arrays.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="EEIndex.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Arrays.h">
+    <ClInclude Include="Scale.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -48,6 +51,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ECUSerial.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="EEIndex.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Scale.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

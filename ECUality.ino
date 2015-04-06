@@ -5,6 +5,7 @@
 #include "Map.h"
 #include "ECUSerial.h"
 #include "Interpolation.h"
+#include "EEIndex.h"
 
 #define PARAM_EE_ADR	0
 #define MAP_EE_ADR		100
@@ -90,9 +91,12 @@ int air_flow_d, air_flow_snap, o2_d;
 //unsigned int n_air, n_rpm;
 //int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
 //int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+//int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 //int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
-Map inj_map;
+
+Scale air_rpm_scale (8);
+Map inj_map (&air_rpm_scale);
+Map correction_map (&air_rpm_scale);
 
 int global_offset; 
 
@@ -129,8 +133,11 @@ void setup()
 
 	good_ee_loads = 1;
 	
+	// we have to call load() like this because it's static.  
+	// It's static so it can be attached to seial commands (via callbacks) 
+	good_ee_loads &= Map::load(&inj_map);		
+	good_ee_loads &= Map::load(&correction_map);
 	good_ee_loads &= loadParamsFromEE();
-	good_ee_loads &= loadOffsetsFromEE();
 
 	// TIMERS
 	TCCR1A = 0;				// disables all output compare modules and clears WGM1<0-1> 
@@ -237,7 +244,9 @@ void Poll_Serial()
 		break;
 
 	case 'x':
-		reportOffsets();
+		Serial.print("Global offset: ");
+		Serial.println(global_offset);
+		Map::report(&correction_map);
 		break;
 
 	case 'L':					// increase fuel locally
@@ -261,7 +270,7 @@ void Poll_Serial()
 		break;
 
 	case 'C':					// clear all local offsets
-		clearArray(correction_map, MAX_MAP_SIZE*MAX_MAP_SIZE);
+		Map::clear(&correction_map);
 		break;
 		
 	case 'c':					// clear global offset
@@ -284,11 +293,11 @@ void Poll_Serial()
 	case'E':					// Load params, map, offsets from EEPROM
 		loadParamsFromEE();
 		Map::load(&inj_map);
-		loadOffsetsFromEE();
+		Map::load(&correction_map);
 		break;
 
 	case 'O':
-		saveOffsetsToEE();
+		Map::save(&correction_map);
 		break;
 
 	case '+':
@@ -298,6 +307,9 @@ void Poll_Serial()
 	case '-':
 		enableDrive();
 		break;
+
+	case 'e':
+		ESerial.reportArray("EE addresses: ", EE_index.addresses, MAX_EE_ADDRESSES);
 
 	default:
 		Serial.println("no comprendo");
@@ -370,19 +382,6 @@ void reportParams()
 	ESerial.reportArray("choke scale values: ", choke_scale_z, N_CHOKE_SCALE);
 
 }
-void reportOffsets()
-{
-	int i;
-
-	Serial.print("global_offset: ");
-	Serial.println(global_offset);
-
-	for (i = 0; i < Map::n_rpm; ++i)
-	{
-		ESerial.reportArray(" ", &correction_map[Map::n_air*i], Map::n_air);
-	}
-	Serial.println();
-}
 
 // EE access functions
 char loadParamsFromEE()
@@ -436,24 +435,7 @@ void saveParamsToEE()
 	address += EEPROM_writeAnything(address, choke_scale_z);		// 8 bytes int x4		TOTAL: 22 of 32
 	Serial.println("saved params to EE.");
 }
-char loadOffsetsFromEE()
-{
-	unsigned int address;
-	address = OFFSET_EE_ADR;
 
-	address += EEPROM_readAnything(address, global_offset);
-	address += EEPROM_readAnything(address, correction_map);
-	return 1;
-}
-void saveOffsetsToEE()
-{
-	unsigned int address;
-	address = OFFSET_EE_ADR;
-
-	address += EEPROM_writeAnything(address, global_offset);
-	address += EEPROM_writeAnything(address, correction_map);
-	Serial.println("offsets saved.");
-}
 
 
 // Sensor reading functions
@@ -529,7 +511,7 @@ void calcInjDuration()
 	}
 	
 	// find nominal
-	new_inj_duration = inj_map.interpolate(rpm, air_flow, correction_map); 
+	new_inj_duration = inj_map.interpolate(rpm, air_flow, &correction_map); 
 	
 	// adjust for stuff
 	accel_offset = adjustForSuddenAccel(air_flow);		// these should not be order dependent.  

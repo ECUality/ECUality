@@ -40,7 +40,7 @@ public:
 	}
 
 	template <typename T>
-	void reportArray(char str[], T data[], unsigned int n)
+	void reportArray(const char str[], T data[], unsigned int n)
 	{
 		int i;
 		Serial.print(str);
@@ -54,7 +54,7 @@ public:
 	}
 
 	template <typename T>
-	char receiveNumberBetween(T *var, const int lower, const int upper, char var_name[])
+	char receiveNumberBetween(T *var, const int lower, const int upper, const char var_name[])
 	{
 		unsigned int new_value = Serial.parseInt();
 		if (new_value > upper)
