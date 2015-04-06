@@ -1,15 +1,15 @@
 
-#include "ECUality.h"
+#include "Arrays.h"
 #include <eeprom.h>
 #include "EEPROMAnything.h"
-#include "ECUality.h"
+#include "Map.h"
+#include "ECUSerial.h"
+#include "Interpolation.h"
 
 #define PARAM_EE_ADR	0
 #define MAP_EE_ADR		100
 #define OFFSET_EE_ADR	600
 
-#define MAX_MAP_SIZE	10U
-#define MIN_MAP_SIZE	3U
 #define N_CHOKE_SCALE	4U
 
 // Pin mappings
@@ -87,11 +87,13 @@ int choke_scale_z[] = { 20, 200, 700, 1000 };	// these are actually fractions z/
 int air_flow_d, air_flow_snap, o2_d;
 
 // map variables
-unsigned int n_air, n_rpm;
-int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
-int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
+//unsigned int n_air, n_rpm;
+//int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
+//int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
+//int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
+Map inj_map;
+
 int global_offset; 
 
  //////////////////// pogram ///////////////////
@@ -126,8 +128,8 @@ void setup()
 	inj_duration = 5;
 
 	good_ee_loads = 1;
+	
 	good_ee_loads &= loadParamsFromEE();
-	good_ee_loads &= loadMapFromEE();
 	good_ee_loads &= loadOffsetsFromEE();
 
 	// TIMERS
@@ -218,7 +220,7 @@ void Poll_Serial()
 		break;
 
 	case 'm':					// report map
-		reportMap();
+		Map::report(&inj_map);
 		break;
 
 	case 'i':					// report injector duration
@@ -227,11 +229,11 @@ void Poll_Serial()
 		break;
 
 	case 'I':					// report Inspection
-		reportArray("inspect array", inspect, 5);
+		ESerial.reportArray("inspect array", inspect, 5);
 		break;
 
 	case 'z':					// report task runtimes
-		reportArray("Task runtimes in us: ", task_runtime, n_tasks);
+		ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
 		break;
 
 	case 'x':
@@ -239,12 +241,12 @@ void Poll_Serial()
 		break;
 
 	case 'L':					// increase fuel locally
-		localOffset(getGain());
+		inj_map.localOffset(rpm, air_flow, getGain());
 		Serial.print(".");
 		break;
 
 	case 'l':					// decrease fuel locally 
-		localOffset(-getGain());
+		inj_map.localOffset(rpm, air_flow, -getGain());
 		Serial.print(".");
 		break;
 
@@ -271,17 +273,17 @@ void Poll_Serial()
 		break;
 
 	case 'M':					// MAP update
-		receiveMap();
+		Map::receive(&inj_map);
 		break;
 
 	case 'S':					// SAVE params, map to EE
 		saveParamsToEE();
-		saveMapToEE();
+		Map::save(&inj_map);
 		break;
 
 	case'E':					// Load params, map, offsets from EEPROM
 		loadParamsFromEE();
-		loadMapFromEE();
+		Map::load(&inj_map);
 		loadOffsetsFromEE();
 		break;
 
@@ -300,13 +302,9 @@ void Poll_Serial()
 	default:
 		Serial.println("no comprendo");
 	}
-	dumpLine();
+	ESerial.dumpLine();
 }
-void dumpLine(void)
-{
-	char str[5];
-	while (Serial.readBytesUntil('\n', str, 4));
-}
+
 int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
 {
 	int gain = 1; 
@@ -325,61 +323,6 @@ void statusReport()
 }
 
 // Serial to data functions
-char receiveMap()
-{
-	char str[3] = "";	// all zeros.
-	int new_engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-	int new_air_gridline[MAX_MAP_SIZE];
-	int new_rpm_gridline[MAX_MAP_SIZE];
-	unsigned int new_n_air, new_n_rpm;
-	unsigned int new_map_size;
-
-	Serial.readBytes(str, 2);
-
-	if (strcmp(str, "ap") != 0)
-	{
-		Serial.println("spell 'map' please");
-		return -1;
-	}
-
-	if (!receiveNumberBetween(&new_n_air, MIN_MAP_SIZE, MAX_MAP_SIZE, "air_gridlines"))
-		return-1;
-
-	if (!receiveNumberBetween(&new_n_rpm, MIN_MAP_SIZE, MAX_MAP_SIZE, "rpm_gridlines"))
-		return -1;
-
-	if (!receiveArray(new_air_gridline, new_n_air, "air gridline"))
-		return -1;
-
-	if (!receiveArray(new_rpm_gridline, new_n_rpm, "rpm gridline"))
-		return -1;
-
-	new_map_size = new_n_air * new_n_rpm;
-	if (!receiveArray(new_engine_map, new_map_size, "map data"))
-		return -1;
-
-
-	n_air = new_n_air;
-	n_rpm = new_n_rpm;
-	copyArray(new_air_gridline, air_gridline, n_air);
-	copyArray(new_rpm_gridline, rpm_gridline, n_rpm);
-	copyArray(new_engine_map, engine_map, new_map_size);
-
-	dumpLine();		// dump any additional characters. 
-	reportMap();
-}
-void reportMap()
-{
-	int i;
-	reportArray("air_gridline:\n", air_gridline, n_air);
-	reportArray("rpm_gridline:\n", rpm_gridline, n_rpm);
-	Serial.println("engine_map:");
-	for (i = 0; i < n_rpm; ++i)
-	{
-		reportArray(" ", &engine_map[n_air*i], n_air);
-	}
-	Serial.print("\n");
-}
 char receiveParams()
 {
 	char str[3] = "";	// all zeros.
@@ -393,16 +336,16 @@ char receiveParams()
 
 	//receiveArray(params, n_params, "param array");
 
-	if (!receiveNumberBetween(&new_air_stabilize_rate, 0, 200, "air_stabilize_rate"))
+	if (!ESerial.receiveNumberBetween(&new_air_stabilize_rate, 0, 200, "air_stabilize_rate"))
 		return-1;
-	if (!receiveNumberBetween(&new_cold_threshold, 90, 195, "cold_threshold"))
+	if (!ESerial.receiveNumberBetween(&new_cold_threshold, 90, 195, "cold_threshold"))
 		return-1;
-	if (!receiveNumberBetween(&new_cranking_dur, 500, 2000, "cranking_dur"))
+	if (!ESerial.receiveNumberBetween(&new_cranking_dur, 500, 2000, "cranking_dur"))
 		return-1;
 
-	if (!receiveArray(new_choke_scale_x, N_CHOKE_SCALE, "choke_scale_x"))
+	if (!ESerial.timedReceiveArray(new_choke_scale_x, N_CHOKE_SCALE, "choke_scale_x"))
 		return -1;
-	if (!receiveArray(new_choke_scale_z, N_CHOKE_SCALE, "choke_scale_z"))
+	if (!ESerial.timedReceiveArray(new_choke_scale_z, N_CHOKE_SCALE, "choke_scale_z"))
 		return -1;
 
 	air_stabilize_rate = new_air_stabilize_rate;
@@ -411,7 +354,7 @@ char receiveParams()
 	copyArray(new_choke_scale_x, choke_scale_x, N_CHOKE_SCALE);
 	copyArray(new_choke_scale_z, choke_scale_z, N_CHOKE_SCALE);
 
-	dumpLine();			// dump any additional characters. 
+	ESerial.dumpLine();			// dump any additional characters. 
 	reportParams();
 }
 void reportParams()
@@ -423,8 +366,8 @@ void reportParams()
 	Serial.print("   cranking_dur: ");
 	Serial.println(cranking_dur);
 
-	reportArray("choke scale Temps:  ", choke_scale_x, N_CHOKE_SCALE);
-	reportArray("choke scale values: ", choke_scale_z, N_CHOKE_SCALE);
+	ESerial.reportArray("choke scale Temps:  ", choke_scale_x, N_CHOKE_SCALE);
+	ESerial.reportArray("choke scale values: ", choke_scale_z, N_CHOKE_SCALE);
 
 }
 void reportOffsets()
@@ -434,9 +377,9 @@ void reportOffsets()
 	Serial.print("global_offset: ");
 	Serial.println(global_offset);
 
-	for (i = 0; i < n_rpm; ++i)
+	for (i = 0; i < Map::n_rpm; ++i)
 	{
-		reportArray(" ", &correction_map[n_air*i], n_air);
+		ESerial.reportArray(" ", &correction_map[Map::n_air*i], Map::n_air);
 	}
 	Serial.println();
 }
@@ -493,46 +436,6 @@ void saveParamsToEE()
 	address += EEPROM_writeAnything(address, choke_scale_z);		// 8 bytes int x4		TOTAL: 22 of 32
 	Serial.println("saved params to EE.");
 }
-char loadMapFromEE()
-{
-	// eeprom addresses: 0 = n_air, n_rpm
-	unsigned int address, value;
-	address = MAP_EE_ADR; //XXX
-
-	address += EEPROM_readAnything(address, value);				// 2 bytes
-	if (!assignIfBetween(value, n_air, MAX_MAP_SIZE, MIN_MAP_SIZE, "n_air"))
-	{
-		detachInterrupt(4);
-		return 0;
-	}
-
-	address += EEPROM_readAnything(address, value);				// 2 bytes
-	if (!assignIfBetween(value, n_rpm, MAX_MAP_SIZE, MIN_MAP_SIZE, "n_rpm"))
-	{
-		detachInterrupt(4);
-		return 0;
-	}
-
-	address += EEPROM_readAnything(address, air_gridline);		// 20 bytes
-	address += EEPROM_readAnything(address, rpm_gridline);		// 20 bytes
-	address += EEPROM_readAnything(address, engine_map);		// 200 bytes  TOTAL: 244 of 496
-	Serial.println("loaded map from EE.");
-	return 1;
-}
-void saveMapToEE()
-{
-	// eeprom addresses: 0 = n_air, n_rpm
-	unsigned int address, map_size;
-	address = MAP_EE_ADR;
-
-	address += EEPROM_writeAnything(address, n_air);
-	address += EEPROM_writeAnything(address, n_rpm);
-	address += EEPROM_writeAnything(address, air_gridline);
-	address += EEPROM_writeAnything(address, rpm_gridline);
-	address += EEPROM_writeAnything(address, engine_map);
-
-	Serial.println("saved map to EE");
-}
 char loadOffsetsFromEE()
 {
 	unsigned int address;
@@ -552,17 +455,6 @@ void saveOffsetsToEE()
 	Serial.println("offsets saved.");
 }
 
-char assignIfBetween(const unsigned int source, unsigned int &destination, unsigned int max, unsigned int min, char var_name[])
-{
-	if ((source > MAX_MAP_SIZE) || (source < MIN_MAP_SIZE))
-	{
-		Serial.print(var_name);
-		Serial.println(" out of range");
-		return 0;
-	}
-	destination = source;
-	return 1;
-}
 
 // Sensor reading functions
 void readAirFlow()
@@ -637,7 +529,7 @@ void calcInjDuration()
 	}
 	
 	// find nominal
-	new_inj_duration = interpolateMap(rpm, air_flow); 
+	new_inj_duration = inj_map.interpolate(rpm, air_flow, correction_map); 
 	
 	// adjust for stuff
 	accel_offset = adjustForSuddenAccel(air_flow);		// these should not be order dependent.  
@@ -693,179 +585,6 @@ void updateInjectors()
 	}
 }
 
-// map interpolation
-unsigned int interpolateMap(unsigned int rpm, unsigned char air)
-{
-	int i_air, i_rpm;
-	int inj_r0a0, inj_r0a1, inj_r1a0, inj_r1a1, inj_r0ak, inj_r1ak, inj_rkak;  // 
-	i_air = findIndexJustAbove(air_gridline, air, n_air);
-	i_rpm = findIndexJustAbove(rpm_gridline, rpm, n_rpm);
-
-	// check if both i's are -1 (key was higher than all array elements)
-	// check if any of them are 0 (key was lower than lowest element)
-	// handle those cases
-	//Serial.print("r");
-	//Serial.print(i_rpm);
-	//Serial.print("a");
-	//Serial.println(i_air);
-
-	if (i_air > 0)
-	{
-		if (i_rpm > 0)			// both rpm and air are on the map, so do bilinear interpolation
-		{
-			inj_r0a0 = mapPoint(i_rpm - 1, i_air - 1);
-			inj_r0a1 = mapPoint(i_rpm - 1, i_air);
-			inj_r1a0 = mapPoint(i_rpm, i_air - 1);
-			inj_r1a1 = mapPoint(i_rpm, i_air);
-
-			inj_r0ak = linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], inj_r0a0, inj_r0a1);
-			inj_r1ak = linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], inj_r1a0, inj_r1a1);
-			return linearInterp(rpm, rpm_gridline[i_rpm - 1], rpm_gridline[i_rpm], inj_r0ak, inj_r1ak);
-		}
-		else if (i_rpm == 0)	// rpm below the map, air is on the map  (1d interpolate along edge)
-		{
-			return linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], mapPoint(0, i_air - 1), mapPoint(0, i_air));
-		}
-		else 					// rpm above map, air on the map (1d interpolate along edge)
-		{
-			return linearInterp(air, air_gridline[i_air - 1], air_gridline[i_air], mapPoint(n_rpm - 1, i_air - 1), mapPoint(n_rpm - 1, i_air));
-		}
-	}
-	else if (i_air == 0)	// air below	
-	{ 
-		if (i_rpm > 0)			// rpm on, air below (1d interpolate along edge)
-		{
-			return linearInterp(rpm, rpm_gridline[i_rpm - 1], rpm_gridline[i_rpm], mapPoint(i_rpm - 1, 0), mapPoint(i_rpm, 0));
-		}
-		else if (i_rpm == 0)	// rpm below, air below (corner) 
-		{
-			return mapPoint(0, 0);
-		}
-		else					// rpm above, air below (corner) 
-		{
-			return mapPoint(n_rpm - 1, 0);
-		}
-	}
-	else	// air above
-	{
-		if (i_rpm > 0)			// rpm on, air above (1d interpolate along edge)
-		{
-			return linearInterp(rpm, rpm_gridline[i_rpm - 1], rpm_gridline[i_rpm], mapPoint(i_rpm - 1, n_air - 1), mapPoint(i_rpm, n_air - 1));
-		}
-		else if (i_rpm == 0)	// rpm below, air above (corner) 
-		{
-			return mapPoint(0, n_air - 1);
-		}
-		else					// rpm above, air above (corner) 
-		{
-			return mapPoint(n_rpm - 1, n_air - 1);
-		}
-	}
-}
-unsigned int mapPoint(char i_rpm, char i_air)
-{
-	static int raw, local;
-	if ((i_rpm >= n_rpm) || (i_rpm < 0) || (i_air >= n_air) || (i_air < 0) )
-	{
-		//Serial.print("ir: ");
-		//Serial.print(int(i_rpm));
-		//Serial.print("   ia: ");
-		//Serial.println(int(i_air));
-		return 0;
-	}
-	raw = engine_map[i_rpm * n_air + i_air];
-	local = correction_map[i_rpm * n_air + i_air];
-	return (raw + local + global_offset);
-}
-int linearInterp(int x_key, int x1, int x2, int y1, int y2)
-{
-	int dx, Dx;
-	long Dy;
-	Dx = x2 - x1;
-	dx = x_key - x1; 
-	Dy = y2 - y1;
-
-	return y1 + (Dy*dx)/Dx;
-}
-char findIndexJustAbove(const int array[], int key, int length)
-{		// assumes the input array is sorted high to low. 
-	int i;
-	for (i = 0; i < length; i++)
-	{
-		if (array[i] < key)
-			return i;
-	}
-	// didn't find a value above key.  Return -1 to indicate an error. 
-	return -1;
-}
-
-// map modification
-void localOffset(long offset)
-{
-	// here, we apply an offset to the map correction in the locale of our current operation (air_flow and rpm) 
-	char i_air, i_rpm;
-	int D_rpm, D_air, d_rpm_lowside, d_air_rightside;
-	long dz_r0, dz_r1;
-	int dz_r0a0, dz_r0a1, dz_r1a0, dz_r1a1;
-		
-	// find the location on the map.
-	i_air = findIndexJustAbove(air_gridline, air_flow, n_air);
-	i_rpm = findIndexJustAbove(rpm_gridline, rpm, n_rpm);
-
-	if ((i_air <= 0) || (i_rpm <= 0))		// if we're not operating on the map, fuggedaboutit
-		return;								// note: -1 means we're above, 0 means we're below so <= 0 captures both
-
-	// 	offset gets divided into 4 the 4 nearest grid intersections based on where we're currently operating. 
-	//  more of the offset goes to the intersections we're closest to. 
-
-	D_rpm = rpm_gridline[i_rpm - 1] - rpm_gridline[i_rpm];	// positive
-	D_air = air_gridline[i_air - 1] - air_gridline[i_air];	// positive
-
-	d_rpm_lowside = rpm - rpm_gridline[i_rpm];			// delta above lower neighbors
-	d_air_rightside = air_flow - air_gridline[i_air];		// delta to left of neighbors. 
-
-	if ((d_rpm_lowside * 2) > D_rpm)		// closer to the upper neighbors.  Use lower delta for calculations.
-	{
-		dz_r0 = (offset * d_rpm_lowside) / D_rpm;
-		dz_r1 = offset - dz_r0;
-	}
-	else									// closer to the lower neighbors.  Use upper delta for calculations.
-	{
-		dz_r1 = (offset * (D_rpm - d_rpm_lowside)) / D_rpm;
-		dz_r0 = offset - dz_r1;
-	}
-
-	if ((d_air_rightside * 2) > D_air)		// closer to the left neighbors, use right side deltas (larger) 
-	{
-		dz_r0a0 = (dz_r0 * d_air_rightside) / D_air;
-		dz_r0a1 = dz_r0 - dz_r0a0;
-
-		dz_r1a0 = (dz_r1 * d_air_rightside) / D_air;
-		dz_r1a1 = dz_r1 - dz_r1a0;
-	}
-	else									// closer to right neighbors, use left side deltas (larger) 
-	{
-		dz_r0a1 = (dz_r0 * (D_air - d_air_rightside)) / D_air;
-		dz_r0a0 = dz_r0 - dz_r0a1;
-
-		dz_r1a1 = (dz_r1 * (D_air - d_air_rightside)) / D_air;
-		dz_r1a0 = dz_r1 - dz_r1a1;
-	}
-
-	editMapPoint(i_rpm - 1, i_air - 1,	dz_r0a0);
-	editMapPoint(i_rpm - 1, i_air,		dz_r0a1);
-	editMapPoint(i_rpm,		i_air - 1,	dz_r1a0);
-	editMapPoint(i_rpm,		i_air,		dz_r1a1);
-}
-void editMapPoint(char i_rpm, char i_air, int offset)
-{
-	if ((i_rpm >= n_rpm) || (i_rpm < 0) || (i_air >= n_air) || (i_air < 0))
-	{
-		Serial.println("index out of bounds");
-		return;
-	}
-	correction_map[n_air*i_rpm + i_air] += offset; 
-}
 
 // analog reading scaling
 int scaleRead(int x, const int x_array[], const int y_array[], char n)
@@ -912,10 +631,17 @@ void toggle(unsigned char pin)
 }
 
 // interrupt routines
-ISR( TIMER1_CAPT_vect )
+ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt 
 {
 	sei();
-	TIMSK1 &= ~_BV(TOIE1);		// disable this interrupt while we're in it. (no good to interrupt ourselves)
+
+	// Some of these tasks take a while, and they all run within this interrupt's scope.
+	// The timer might have enough time to reach the another input compare match, which 
+	// would trigger another of these interrupts.  We have to keep global interrupts enabled
+	// so the tach pulses CAN interrupt this interrupt, but if the task scheduler interrupts 
+	// itself before finishing, we enter an endless loop and crash the stack.   
+	// So we turn off the TIMER1 interrupts while we're in this ISR to prevent this. 
+	TIMSK1 = 0;		
 	static unsigned char i;
 	static unsigned int task_start_time = 0; 
 	
@@ -933,8 +659,13 @@ ISR( TIMER1_CAPT_vect )
 		}
 	}
 
-	TIMSK1 |= _BV(TOIE1);	// this interrup can (and will) interrupt itself here, but we're worried about the reporting, 
-							// which is only a problem if we don't get to the part where it stops.  This ensures it does get that far. 
+	// We re-enable this interrupt now that we've gotten through the task list. 
+	// as we do this, this interrupt may interrupt itself here, but 
+	// all the tasks we were doing have had their "ms_since_last_task[i]"s cleared, 
+	// so we'll blaze through the list and exit both nested ISRs. 
+	TIMSK1 |= _BV(ICIE1);	
+							
+					
 }
 void isrTachRisingEdge()
 {
