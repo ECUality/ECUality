@@ -9,7 +9,9 @@
 Scale::Scale(unsigned char n_p)
 {
 	n = n_p;
-	ee_start_address = getEEAddy(50);
+
+	// 100 bytes for easy reading.  Should need SCALE_SIZE_MAX * 2(bytes per int) * 2(two arrays) = 80
+	ee_address = getEEAddy(100);
 }
 
 
@@ -21,7 +23,7 @@ const char Scale::receive(void* obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
 	char good = 1;
-	int new_n, new_x[MAX_MAP_SIZE], new_y[MAX_MAP_SIZE];
+	int new_n, new_x[SCALE_SIZE_MAX], new_y[SCALE_SIZE_MAX];
 
 	good &= ESerial.timedParseInt(new_n);
 	good &= ESerial.timedReceiveArray(new_x, new_n, "x gridline");
@@ -43,14 +45,13 @@ const char Scale::receive(void* obj_ptr)
 const char Scale::load(void* obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
-	char good = 1;
-	int new_n, new_x[MAX_MAP_SIZE], new_y[MAX_MAP_SIZE];
+	int new_n, new_x[SCALE_SIZE_MAX], new_y[SCALE_SIZE_MAX];
 	unsigned int address;
 
-	address = self->ee_start_address;
+	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println("no EE address for Scale");
+		Serial.println(F("no EE address for Scale"));
 		return 0;
 	}
 	
@@ -58,14 +59,16 @@ const char Scale::load(void* obj_ptr)
 	address += EEPROM_readAnything(address, new_x);
 	address += EEPROM_readAnything(address, new_y);
 
-	if (!good)
+	if (!self->verify(new_x, new_y, new_n))
+	{
+		Serial.println(F("Invalid scale - not loaded"));
 		return 0;
+	}
 
 	self->n = new_n;
 	copyArray(new_x, self->x, new_n);
 	copyArray(new_y, self->y, new_n);
 
-	report(obj_ptr);
 	return 1;
 }
 
@@ -74,10 +77,10 @@ const char Scale::save(const void * obj_ptr)
 	Scale* self = (Scale *)obj_ptr;
 	unsigned int address;
 
-	address = self->ee_start_address;
+	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println("no EE address for Scale");
+		Serial.println(F("no EE address for Scale"));
 		return 0;
 	}
 
@@ -85,13 +88,12 @@ const char Scale::save(const void * obj_ptr)
 	address += EEPROM_writeAnything(address, self->x);
 	address += EEPROM_writeAnything(address, self->y);
 
-	Serial.println("saved map to EE");
+	Serial.println(F("saved scale to EE"));
 }
 
 const char Scale::report(const void* obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
-	int i;
 	ESerial.reportArray("x: ", self->x, self->n);
 	ESerial.reportArray("y: ", self->y, self->n);
 	Serial.println();
@@ -117,7 +119,7 @@ const bool Scale::verify(const int new_x[], const int new_y[], const int new_n)
 	int i;
 	bool valid = 1;
 
-	valid &= ((new_n >= MIN_MAP_SIZE) && (new_n <= MAX_MAP_SIZE));
+	valid &= ((new_n >= SCALE_SIZE_MIN) && (new_n <= SCALE_SIZE_MAX));
 
 	for (i = 0; i < new_n; i++)
 	{
@@ -128,7 +130,7 @@ const bool Scale::verify(const int new_x[], const int new_y[], const int new_n)
 	return valid;
 }
 
-unsigned int Scale::getEEAddy(unsigned int size)
+const unsigned int Scale::getEEAddy(unsigned int size)
 {
 	if (size < sizeof(*this))
 		size = sizeof(*this);

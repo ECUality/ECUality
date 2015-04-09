@@ -1,11 +1,13 @@
 
 #include "Arrays.h"
-#include <eeprom.h>
-#include "EEPROMAnything.h"
 #include "Map.h"
+#include "Scale.h"
+#include "Parameter.h"
 #include "ECUSerial.h"
 #include "Interpolation.h"
 #include "EEIndex.h"
+#include <eeprom.h>
+#include "EEPROMAnything.h"
 
 #define PARAM_EE_ADR	0
 #define MAP_EE_ADR		100
@@ -61,10 +63,6 @@ extern int inspect[5] = {};
 // operating control variables
 char good_ee_loads;
 
-unsigned int air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-unsigned int cold_threshold;			// the temperature below which enrichment kicks in.  (100F to 150F)
-unsigned int cranking_dur;				// the constant duration that gets sent while cranking (500 - 2000) 
-
 // task variables
 unsigned int ms_freq_of_task[20];
 unsigned int task_runtime[20];
@@ -76,16 +74,22 @@ unsigned char n_tasks;
 int air_flow, rpm, o2, air_temp, coolant_temp, oil_pressure;
 unsigned int tach_period, inj_duration;
 
-const int temp_scale_x[] = { 563, 454, 356, 278, 208, 157, 116, 88, 66, 52, 41};
-const int temp_scale_z[] = {32, 50, 68, 86, 104, 122, 140, 158, 176, 194, 212};
-const char n_temp_scale = 11;
-
-int choke_scale_x[] = { 150, 100, 50, 20 };
-int choke_scale_z[] = { 20, 200, 700, 1000 };	// these are actually fractions z/1024
-
-
 // variables that capture dynamic aspects of sensor input
 int air_flow_d, air_flow_snap, o2_d;
+
+// EE-Backed Parameters //////////////////////////////////
+
+//unsigned int air_stabilize_rate;		// the rate at which accelerator pump transient decays.
+//unsigned int cold_threshold;			// the temperature below which enrichment kicks in.  (100F to 150F)
+//unsigned int cranking_dur;				// the constant duration that gets sent while cranking (500 - 2000) 
+
+//const int temp_scale_x[] = { 563, 454, 356, 278, 208, 157, 116, 88, 66, 52, 41};
+//const int temp_scale_z[] = {32, 50, 68, 86, 104, 122, 140, 158, 176, 194, 212};
+//const char n_temp_scale = 11;
+
+//int choke_scale_x[] = { 150, 100, 50, 20 };
+//int choke_scale_z[] = { 20, 200, 700, 1000 };	// these are actually fractions z/1024
+
 
 // map variables
 //unsigned int n_air, n_rpm;
@@ -94,6 +98,11 @@ int air_flow_d, air_flow_snap, o2_d;
 //int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
 //int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
 
+Parameter air_stabilize_rate(5, 500);
+Parameter cold_threshold (80, 190); 
+Parameter cranking_dur (800, 3000);
+Scale choke_scale (4);
+Scale temp_scale(11);
 Scale air_rpm_scale (8);
 Map inj_map (&air_rpm_scale);
 Map correction_map (&air_rpm_scale);
@@ -130,15 +139,9 @@ void setup()
 	//pinMode(13, OUTPUT);
 
 	inj_duration = 5;
-
 	good_ee_loads = 1;
+	loadData();
 	
-	// we have to call load() like this because it's static.  
-	// It's static so it can be attached to seial commands (via callbacks) 
-	good_ee_loads &= Map::load(&inj_map);		
-	good_ee_loads &= Map::load(&correction_map);
-	good_ee_loads &= loadParamsFromEE();
-
 	// TIMERS
 	TCCR1A = 0;				// disables all output compare modules and clears WGM1<0-1> 
 	TCCR1B = _BV(CS10);		// sets prescaler to 1:1, and turns on timer, clears WGM1<3:2>
@@ -277,8 +280,24 @@ void Poll_Serial()
 		global_offset = 0;
 		break;
 
-	case 'P':					// Parameter update
-		receiveParams();
+	case 'v':					// Parameter update
+		Parameter::receive(&cold_threshold);
+		break;
+
+	case 'b':
+		Parameter::receive(&cranking_dur);
+		break;
+
+	case 'n':
+		Scale::receive(&temp_scale);
+		break;
+
+	case 'u':
+		Scale::receive(&choke_scale);
+		break;
+
+	case 'h':
+		Scale::receive(&air_rpm_scale);
 		break;
 
 	case 'M':					// MAP update
@@ -286,14 +305,11 @@ void Poll_Serial()
 		break;
 
 	case 'S':					// SAVE params, map to EE
-		saveParamsToEE();
-		Map::save(&inj_map);
+		saveData();
 		break;
 
 	case'E':					// Load params, map, offsets from EEPROM
-		loadParamsFromEE();
-		Map::load(&inj_map);
-		Map::load(&correction_map);
+		loadData();
 		break;
 
 	case 'O':
@@ -333,110 +349,37 @@ void statusReport()
 		Serial.print(inj_duration);
 	}
 }
-
-// Serial to data functions
-char receiveParams()
+const char loadData()
 {
-	char str[3] = "";	// all zeros.
+	char good = 1;
+	good &= Parameter::load(&cranking_dur);
+	good &= Parameter::load(&cold_threshold);
+	good &= Scale::load(&choke_scale);
+	good &= Scale::load(&temp_scale);
+	good &= Scale::load(&air_rpm_scale);
+	good &= Map::load(&inj_map);
+	good &= Map::load(&correction_map);
 
-	unsigned int new_air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-	unsigned int new_cold_threshold;			// the temperature below which enrichment kicks in. 
-	unsigned int new_cranking_dur;				// the constant duration that gets sent while cranking
-	int new_choke_scale_x[N_CHOKE_SCALE];
-	int new_choke_scale_z[N_CHOKE_SCALE];
-
-
-	//receiveArray(params, n_params, "param array");
-
-	if (!ESerial.receiveNumberBetween(&new_air_stabilize_rate, 0, 200, "air_stabilize_rate"))
-		return-1;
-	if (!ESerial.receiveNumberBetween(&new_cold_threshold, 90, 195, "cold_threshold"))
-		return-1;
-	if (!ESerial.receiveNumberBetween(&new_cranking_dur, 500, 2000, "cranking_dur"))
-		return-1;
-
-	if (!ESerial.timedReceiveArray(new_choke_scale_x, N_CHOKE_SCALE, "choke_scale_x"))
-		return -1;
-	if (!ESerial.timedReceiveArray(new_choke_scale_z, N_CHOKE_SCALE, "choke_scale_z"))
-		return -1;
-
-	air_stabilize_rate = new_air_stabilize_rate;
-	cold_threshold = new_cold_threshold;
-	cranking_dur = new_cranking_dur;
-	copyArray(new_choke_scale_x, choke_scale_x, N_CHOKE_SCALE);
-	copyArray(new_choke_scale_z, choke_scale_z, N_CHOKE_SCALE);
-
-	ESerial.dumpLine();			// dump any additional characters. 
-	reportParams();
+	if (!good)
+		Serial.println(F("not all data loaded"));
+	return good; 
+}
+void saveData()
+{
+	Parameter::save(&cranking_dur);
+	Parameter::save(&cold_threshold);
+	Scale::save(&choke_scale);
+	Scale::save(&temp_scale);
+	Scale::save(&air_rpm_scale);
+	Map::save(&inj_map);
+	Map::save(&correction_map);
 }
 void reportParams()
 {
-	Serial.print("air_stabilize_rate: ");
-	Serial.print(air_stabilize_rate);
-	Serial.print("   cold_threshold: ");
-	Serial.print(cold_threshold);
-	Serial.print("   cranking_dur: ");
-	Serial.println(cranking_dur);
-
-	ESerial.reportArray("choke scale Temps:  ", choke_scale_x, N_CHOKE_SCALE);
-	ESerial.reportArray("choke scale values: ", choke_scale_z, N_CHOKE_SCALE);
-
+	Serial.println(F("cold threshold, cranking duration : "));
+	Parameter::report(&cold_threshold);
+	Parameter::report(&cranking_dur);
 }
-
-// EE access functions
-char loadParamsFromEE()
-{
-	unsigned int address;
-	address = PARAM_EE_ADR;
-
-	unsigned int new_air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-	unsigned int new_cold_threshold;			// the temperature below which enrichment kicks in. 
-	unsigned int new_cranking_dur;				// the constant duration that gets sent while cranking
-	int new_choke_scale_x[N_CHOKE_SCALE];
-	int new_choke_scale_z[N_CHOKE_SCALE];
-
-	address += EEPROM_readAnything(address, new_air_stabilize_rate);	// 2 bytes unsigned int
-	address += EEPROM_readAnything(address, new_cold_threshold);		// 2 bytes unsigned int
-	address += EEPROM_readAnything(address, new_cranking_dur);			// 2 bytes unsigned int	
-	address += EEPROM_readAnything(address, new_choke_scale_x);				// 8 bytes int x4
-	address += EEPROM_readAnything(address, new_choke_scale_z);				// 8 bytes int x4		TOTAL: 22 of 32
-
-	char good = 1;
-	good = good && (new_air_stabilize_rate >= 0) && (new_air_stabilize_rate <= 100);
-	good = good && (new_cold_threshold >= 90) && (new_cold_threshold <= 195);
-	good = good && (new_cranking_dur >= 500) && (new_cranking_dur <= 2000);
-	good = good && (new_choke_scale_x[0] >= new_cold_threshold) && (new_choke_scale_x[0] <= 230);
-	good = good && (new_choke_scale_z[N_CHOKE_SCALE - 1] >= 200) && (new_choke_scale_z[N_CHOKE_SCALE - 1] <= 2000);
-	
-	if (!good)
-	{
-		Serial.println("invalid parameter.");
-		return 0;
-	}
-
-	air_stabilize_rate = new_air_stabilize_rate;
-	cold_threshold = new_cold_threshold;
-	cranking_dur = new_cranking_dur;
-	copyArray(new_choke_scale_x, choke_scale_x, N_CHOKE_SCALE);
-	copyArray(new_choke_scale_z, choke_scale_z, N_CHOKE_SCALE);
-
-	Serial.println("loaded params from EE.");
-	return 1;
-}
-void saveParamsToEE()
-{
-	unsigned int address;
-	address = PARAM_EE_ADR;
-
-	address += EEPROM_writeAnything(address, air_stabilize_rate);	// 2 bytes unsigned char
-	address += EEPROM_writeAnything(address, cold_threshold);		// 2 bytes unsigned int
-	address += EEPROM_writeAnything(address, cranking_dur);			// 2 bytes unsigned int	
-	address += EEPROM_writeAnything(address, choke_scale_x);		// 8 bytes int x4
-	address += EEPROM_writeAnything(address, choke_scale_z);		// 8 bytes int x4		TOTAL: 22 of 32
-	Serial.println("saved params to EE.");
-}
-
-
 
 // Sensor reading functions
 void readAirFlow()
@@ -451,8 +394,8 @@ void readAirFlow()
 
 	if (air_flow_snap)
 	{
-		if (air_flow_snap > air_stabilize_rate)
-			air_flow_snap -= air_stabilize_rate;
+		if (air_flow_snap > air_stabilize_rate.value)
+			air_flow_snap -= air_stabilize_rate.value;
 		else
 			air_flow_snap = 0;
 	}
@@ -469,12 +412,12 @@ void readO2Sensor()
 void readAirTemp() 
 {
 	air_temp = analogRead(air_temp_pin);
-	air_temp = scaleRead(air_temp, temp_scale_x, temp_scale_z, n_temp_scale);
+	air_temp = temp_scale.interpolate(air_temp);
 }
 void readCoolantTemp() 
 {
 	coolant_temp = analogRead(coolant_temp_pin);
-	coolant_temp = scaleRead(coolant_temp, temp_scale_x, temp_scale_z, n_temp_scale);
+	coolant_temp = temp_scale.interpolate(coolant_temp);
 }
 void readOilPressure()
 {
@@ -500,8 +443,8 @@ void calcInjDuration()
 
 	if (digitalRead(cranking_pin))
 	{
-		choke_offset = adjustForColdEngine(cranking_dur, coolant_temp);
-		inj_duration = cranking_dur + choke_offset;
+		choke_offset = adjustForColdEngine(cranking_dur.value, coolant_temp);
+		inj_duration = cranking_dur.value + choke_offset;
 		return;
 	}
 	if (areWeCoasting(rpm, air_flow))
@@ -514,7 +457,7 @@ void calcInjDuration()
 	new_inj_duration = inj_map.interpolate(rpm, air_flow, &correction_map); 
 	
 	// adjust for stuff
-	accel_offset = adjustForSuddenAccel(air_flow);		// these should not be order dependent.  
+	accel_offset = adjustForAccel(air_flow);		// these should not be order dependent.  
 	choke_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
 	air_temp_offset = adjustForAirTemp(new_inj_duration, air_temp);
 
@@ -523,7 +466,7 @@ void calcInjDuration()
 	// output that shit
 	inj_duration = new_inj_duration;
 }
-int adjustForSuddenAccel(int air_flow)
+int adjustForAccel(int air_flow)
 {
 	return 0;
 }
@@ -534,10 +477,10 @@ int adjustForColdEngine(unsigned int nominal_duration, int coolant_temp)
 	// takes a threshold temp and a rate (mx +b) for linear dependence on  coolant temperature
 	unsigned long adjustment;
 	
-	if (coolant_temp >= cold_threshold)		// is engine already warm? 
+	if (coolant_temp >= cold_threshold.value)		// is engine already warm? 
 		return 0;
 
-	adjustment = scaleRead(coolant_temp, choke_scale_x, choke_scale_z, N_CHOKE_SCALE);
+	adjustment = choke_scale.interpolate(coolant_temp);
 	adjustment *= nominal_duration;
 	adjustment >>= 10;		// divide by 1024
 	return int(adjustment);	// adjustment;		XXX

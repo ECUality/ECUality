@@ -57,7 +57,7 @@ const char Map::load(void* obj_ptr)
 	address = self->ee_start_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println("no EE address for Map");
+		Serial.println(F("no EE address for Map"));
 		return 0;
 	}
 
@@ -73,7 +73,7 @@ const char Map::load(void* obj_ptr)
 	self->n = new_n;
 	copyArray(new_z, self->z, new_n*new_n);
 
-	Serial.println("loaded map from EE.");
+	Serial.println(F("loaded map from EE."));
 	return 1;
 }
 
@@ -99,14 +99,14 @@ const char Map::save(const void* obj_ptr)
 	address = self->ee_start_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println("no EE address for Map");
+		Serial.println(F("no EE address for Map"));
 		return 0;
 	}
 
 	address += EEPROM_writeAnything(address, self->n);
 	address += EEPROM_writeAnything(address, self->z);
 
-	Serial.println("saved map to EE");
+	Serial.println(F("saved map to EE"));
 }
 
 const char Map::clear(void * obj_ptr)
