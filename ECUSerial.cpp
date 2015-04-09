@@ -3,7 +3,17 @@
 #include "Arduino.h"
 #include "Arrays.h"
 
+void Ftochar(const __FlashStringHelper *ifsh, char* c, uint8_t n)
+{
+	PGM_P p = reinterpret_cast<PGM_P>(ifsh);
+	uint8_t i;
 
+	for (i = 0; i < n; i++)
+	{
+		c[i] = pgm_read_byte(p++);
+		if (c == 0) break;
+	}
+}
 
 ECUSerial::ECUSerial() 
 {
@@ -15,19 +25,27 @@ ECUSerial::~ECUSerial() { }
 void ECUSerial::executeCommand()
 {
 	char i;
-	char c[N_CMD_CHARS];
+	char c[N_CMD_CHARS] = "";
 	
-	Serial.readBytesUntil('\n', c, N_CMD_CHARS - 1);
+	if (!Serial.available())
+		return;
+
+	Serial.setTimeout(20);		// give it just a little time to give us a string (avoids delay for non-numerical commands)
+	Serial.readBytesUntil(' ', c, N_CMD_CHARS - 1);
+	Serial.setTimeout(SERIAL_TIMEOUT);
 
 	for (i = 0; i < n_commands; i++)
 	{
-		if (strcmp(c, command_str))		// if the command matches
+		if (!strncmp(c, command_str[i], strlen(command_str[i])))		// if the strings match, strncmp returns 0
 		{
 			// call attached function on the attached object. 
-			(*fun_ptr[i])(obj_ptr);
+			(*fun_ptr[i])(obj_ptr[i]);
+			ESerial.dumpLine();
 			return;
 		}
 	}
+	Serial.println("no comprendo");		// if we don't return by now, there was no match. 
+	ESerial.dumpLine();
 }
 
 char ECUSerial::timedParseInt(int &value, unsigned char timeout)
@@ -59,12 +77,15 @@ char ECUSerial::timedReceiveArray(int new_array[], const unsigned int n_array, c
 	return 1;
 }
 
-char ECUSerial::addCommand(const void(*function_ptr)(void*), void* object, const char name[N_CMD_CHARS])
+char ECUSerial::addCommand(const __FlashStringHelper* new_command_str_F, const char(*function_ptr)(void*), void* object)
 {
+	char new_command_str[N_CMD_CHARS];
+	Ftochar(new_command_str_F, new_command_str, N_CMD_CHARS);
 	fun_ptr[n_commands] = function_ptr;
 	obj_ptr[n_commands] = object;
-	copyArray(name, command_str, N_CMD_CHARS);
+	copyArray(new_command_str, command_str[n_commands], N_CMD_CHARS);
 	n_commands++;
 }
+
 
 ECUSerial ESerial;

@@ -7,12 +7,12 @@
 #include "Arrays.h"
 
 
-Map::Map(const Scale* scale_p, unsigned char size, int z_upper_p, int z_lower_p)
+Map::Map(const Scale* scale_p, unsigned char size, int z_lower_, int z_upper_)
 {
 	scale = scale_p;
 	n = size;
-	z_upper = z_upper_p;
-	z_lower = z_lower_p;
+	z_upper = z_upper_;
+	z_lower = z_lower_;
 	ee_start_address = getEEAddy(300);	
 }
 
@@ -20,7 +20,7 @@ Map::~Map()
 {
 }
 
-const char Map::receive(void* obj_ptr)
+const char Map::write(void* obj_ptr)
 {
 	Map* self = (Map *)obj_ptr;
 	int new_z[MAX_MAP_SIZE*MAX_MAP_SIZE];
@@ -43,7 +43,7 @@ const char Map::receive(void* obj_ptr)
 
 	ESerial.dumpLine();		// dump any additional characters. 
 
-	report(obj_ptr);
+	read(obj_ptr);
 	return 1;
 }
 
@@ -77,7 +77,7 @@ const char Map::load(void* obj_ptr)
 	return 1;
 }
 
-const char Map::report(const void* obj_ptr)
+const char Map::read(void* obj_ptr)
 {
 	Map* self = (Map *)obj_ptr;
 	int i;
@@ -91,7 +91,7 @@ const char Map::report(const void* obj_ptr)
 	Serial.print("\n");
 }
 
-const char Map::save(const void* obj_ptr)
+const char Map::save(void* obj_ptr)
 {
 	Map* self = (Map *)obj_ptr;
 	unsigned int address;
@@ -277,6 +277,7 @@ const bool Map::verify(const int new_z[], const int new_n)
 	bool valid = 1;
 
 	valid &= ((new_n >= MIN_MAP_SIZE) && (new_n <= MAX_MAP_SIZE));
+	valid &= (new_n == scale->n);
 
 	for (i = 0; i < (new_n*new_n); i++)
 		valid &= ((new_z[i] >= z_lower) && (new_z[i] <= z_upper));

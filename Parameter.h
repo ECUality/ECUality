@@ -8,10 +8,11 @@ public:
 	Parameter(int minimum, int maximum);
 	~Parameter();
 
-	static const char receive(void* obj_ptr);
-	static void report(void* obj_ptr);
+	static const char write(void* obj_ptr);
+	static const char read(void* obj_ptr);
 	static const char load(void* obj_ptr);
 	static const char save(void* obj_ptr);
+	static const char clear(void* obj_ptr);
 
 	int value;
 

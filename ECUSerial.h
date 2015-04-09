@@ -2,23 +2,21 @@
 #include "HardwareSerial.h"
 
 #define SERIAL_TIMEOUT 50
-#define MAX_COMMANDS 30
+#define N_COMMANDS_MAX 99
 #define N_CMD_CHARS 5		// so we can use 4 characters
 
 class ECUSerial
 {
-	// a pointer to a function that takes, as an argument, a pointer to an object.  (super generic) 
-	// these are used to call static member functions belonging to classes which perform various 
-	// actions on objects belonging to their respective classes.  For example, to call "receive", 
-	// which lives inside the "Map" class, to read new map data from the serial port into a specific
-	// Map object. 
-	const void (*fun_ptr[MAX_COMMANDS])(void *);	
+	// class contains 3 lists.  1: list of function pointers, 2: list of object pointers, 3: list of strings.
+	// the function pointers and object pointers together define an action happening to a specific object.  
+	// the function takes, as an argument, a pointer to the object the function is operating on.  
+	// These listed functions are static member functions, which lets them be called this way.  
+	// For example, to call "write" on the Map map1, the static member fuction "write" belonging to "Map" class
+	// is called and passed a pointer to map1.  
 
-	// the pointers to the objects that are passed to the above functions. 
-	void *obj_ptr[MAX_COMMANDS];
-
-	char command_str[N_CMD_CHARS];
-
+	const char (*fun_ptr[N_COMMANDS_MAX])(void *);	// the function pointers
+	void* obj_ptr[N_COMMANDS_MAX];					// the object pointers that are passed to the above functions. 
+	char command_str[N_COMMANDS_MAX][N_CMD_CHARS];	// the command strings (5 bytes) for each command
 	char n_commands;
 
 public:
@@ -27,7 +25,7 @@ public:
 
 	void executeCommand();
 
-	char addCommand(const void(*function_ptr)(void*), void* object, const char name[N_CMD_CHARS]);
+	char addCommand(const __FlashStringHelper* new_command_str, const char(*function_ptr)(void*), void* object);
 
 	char timedParseInt(int &value, unsigned char timeout = 55);
 

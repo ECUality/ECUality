@@ -6,10 +6,14 @@
 #include "Arrays.h"
 
 
-Scale::Scale(unsigned char n_p)
+Scale::Scale(int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p)
 {
 	n = n_p;
-
+	x_lower = x_lower_;
+	x_upper = x_upper_;
+	y_lower = y_lower_;
+	y_upper = y_upper_;
+	
 	// 100 bytes for easy reading.  Should need SCALE_SIZE_MAX * 2(bytes per int) * 2(two arrays) = 80
 	ee_address = getEEAddy(100);
 }
@@ -19,7 +23,7 @@ Scale::~Scale()
 {
 }
 
-const char Scale::receive(void* obj_ptr)
+const char Scale::write(void* obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
 	char good = 1;
@@ -38,7 +42,7 @@ const char Scale::receive(void* obj_ptr)
 
 	ESerial.dumpLine();		// dump any additional characters. 
 
-	report(obj_ptr);
+	read(obj_ptr);
 	return 1;
 }
 
@@ -72,7 +76,7 @@ const char Scale::load(void* obj_ptr)
 	return 1;
 }
 
-const char Scale::save(const void * obj_ptr)
+const char Scale::save(void * obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
 	unsigned int address;
@@ -91,7 +95,7 @@ const char Scale::save(const void * obj_ptr)
 	Serial.println(F("saved scale to EE"));
 }
 
-const char Scale::report(const void* obj_ptr)
+const char Scale::read(void* obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
 	ESerial.reportArray("x: ", self->x, self->n);

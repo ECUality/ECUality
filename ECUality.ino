@@ -53,13 +53,6 @@ uint8_t outputs[] = { inj1_pin, inj2_pin, inj3_pin, inj4_pin,
 	cs_knock, cs_sd, cs_inj, inj_led, '\0'};
 
 
-extern int inspect[5] = {};
-
-// alternate paramater data structure
-//const unsigned char n_params = 4;
-//unsigned int params[n_params] = {0};
-//char *param_names[] = { "air_stabilize_rate", "choke_rate", "cold_threshold", "cranking_dur" };
-
 // operating control variables
 char good_ee_loads;
 
@@ -79,37 +72,23 @@ int air_flow_d, air_flow_snap, o2_d;
 
 // EE-Backed Parameters //////////////////////////////////
 
-//unsigned int air_stabilize_rate;		// the rate at which accelerator pump transient decays.
-//unsigned int cold_threshold;			// the temperature below which enrichment kicks in.  (100F to 150F)
-//unsigned int cranking_dur;				// the constant duration that gets sent while cranking (500 - 2000) 
-
-//const int temp_scale_x[] = { 563, 454, 356, 278, 208, 157, 116, 88, 66, 52, 41};
-//const int temp_scale_z[] = {32, 50, 68, 86, 104, 122, 140, 158, 176, 194, 212};
-//const char n_temp_scale = 11;
-
 //int choke_scale_x[] = { 150, 100, 50, 20 };
 //int choke_scale_z[] = { 20, 200, 700, 1000 };	// these are actually fractions z/1024
 
 
-// map variables
-//unsigned int n_air, n_rpm;
-//int air_gridline[MAX_MAP_SIZE], rpm_gridline[MAX_MAP_SIZE];
-//int engine_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-//int correction_map[MAX_MAP_SIZE * MAX_MAP_SIZE];
-//int map_volatility[MAX_MAP_SIZE * MAX_MAP_SIZE];
+Parameter global_offset(-1000, 1000);
+Parameter accel_stabilize_rate(5, 500);		// the rate at which accelerator pump transient decays.
+Parameter cold_threshold (80, 190);			// the temperature below which enrichment kicks in.  (100F to 150F)
+Parameter cranking_dur (800, 3000);			// the injector duration while cranking not counting choke (500 - 2000) 
+Scale choke_scale (-40, 200, 0, 2000, 4);	// scales engine temperature to added injector time 
+Scale temp_scale (1, 1000, -10, 220, 11);	// scales measured voltage on temp sensors to actual temp. in F
+Scale air_rpm_scale (0, 255, 200, 6000, 8);	// the x and y gridlines (air-flow and rpm) for the injector map.  (not a scaling function) 
+Map inj_map (&air_rpm_scale, 8, 400, 3000);	// the 2d map defining injector durations with respect to air-flow and rpm
+Map correction_map (&air_rpm_scale, 8, -1500, 1500); // local modifications to the inj_map, applied by the optimizer. 
 
-Parameter air_stabilize_rate(5, 500);
-Parameter cold_threshold (80, 190); 
-Parameter cranking_dur (800, 3000);
-Scale choke_scale (4);
-Scale temp_scale(11);
-Scale air_rpm_scale (8);
-Map inj_map (&air_rpm_scale);
-Map correction_map (&air_rpm_scale);
-
-int global_offset; 
 
  //////////////////// pogram ///////////////////
+const char loadData(void* obj_ptr = NULL);
 void setup()
 {
 	Serial.begin(115200);
@@ -122,7 +101,7 @@ void setup()
 	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
 	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
 	task[7] = readOilPressure;		ms_freq_of_task[7] = 250;
-	task[8] = statusReport;			ms_freq_of_task[8] = 250;
+	task[8] = autoReport;			ms_freq_of_task[8] = 250;
 	n_tasks = 9;
 
 	// input interrupt pin
@@ -139,8 +118,10 @@ void setup()
 	//pinMode(13, OUTPUT);
 
 	inj_duration = 5;
-	good_ee_loads = 1;
-	loadData();
+	
+	good_ee_loads = loadData(NULL);		// load data from EE.
+
+	initProtocol();						// set up protocol. 
 	
 	// TIMERS
 	TCCR1A = 0;				// disables all output compare modules and clears WGM1<0-1> 
@@ -182,166 +163,11 @@ void setPinModes(const uint8_t pins[], const uint8_t direction)
 
 void loop()
 {
-	Poll_Serial();
+	ESerial.executeCommand();
 }
 
-// Serial functions
-void Poll_Serial()
-{
-	static char c[10];
-	static int gain;
 
-	if (!Serial.available())
-		return;
-
-	Serial.readBytes(c, 1);
-	//Serial.write(c, 1);		// echo
-
-
-	switch (c[0])
-	{
-	case 'a':					// report air flow
-		Serial.print("air flow: ");
-		Serial.println(air_flow);
-		break;
-
-	case 'r':					// report rpm
-		Serial.print("rpm: ");
-		Serial.println(rpm);
-		break;
-
-	case 'o':					// report O2 signal
-		Serial.print("O2: ");
-		Serial.println(o2);
-		break;
-
-	case 't':					// report O2 signal
-		Serial.print("coolant temp: ");
-		Serial.println(coolant_temp);
-		break;
-
-	case 'q':					// report O2 signal
-		Serial.print("air temp: ");
-		Serial.println(air_temp);
-		break;
-
-	case'p':					// preport params
-		reportParams();
-		break;
-
-	case 'm':					// report map
-		Map::report(&inj_map);
-		break;
-
-	case 'i':					// report injector duration
-		Serial.print("inj duration: ");
-		Serial.println(inj_duration);
-		break;
-
-	case 'I':					// report Inspection
-		ESerial.reportArray("inspect array", inspect, 5);
-		break;
-
-	case 'z':					// report task runtimes
-		ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
-		break;
-
-	case 'x':
-		Serial.print("Global offset: ");
-		Serial.println(global_offset);
-		Map::report(&correction_map);
-		break;
-
-	case 'L':					// increase fuel locally
-		inj_map.localOffset(rpm, air_flow, getGain());
-		Serial.print(".");
-		break;
-
-	case 'l':					// decrease fuel locally 
-		inj_map.localOffset(rpm, air_flow, -getGain());
-		Serial.print(".");
-		break;
-
-	case 'G':					// increase fuel globally 
-		global_offset += getGain();
-		Serial.print(".");
-		break;
-
-	case 'g':					// decrease fuel globally
-		global_offset -= getGain();
-		Serial.print(".");
-		break;
-
-	case 'C':					// clear all local offsets
-		Map::clear(&correction_map);
-		break;
-		
-	case 'c':					// clear global offset
-		global_offset = 0;
-		break;
-
-	case 'v':					// Parameter update
-		Parameter::receive(&cold_threshold);
-		break;
-
-	case 'b':
-		Parameter::receive(&cranking_dur);
-		break;
-
-	case 'n':
-		Scale::receive(&temp_scale);
-		break;
-
-	case 'u':
-		Scale::receive(&choke_scale);
-		break;
-
-	case 'h':
-		Scale::receive(&air_rpm_scale);
-		break;
-
-	case 'M':					// MAP update
-		Map::receive(&inj_map);
-		break;
-
-	case 'S':					// SAVE params, map to EE
-		saveData();
-		break;
-
-	case'E':					// Load params, map, offsets from EEPROM
-		loadData();
-		break;
-
-	case 'O':
-		Map::save(&correction_map);
-		break;
-
-	case '+':
-		disableDrive();
-		break;
-
-	case '-':
-		enableDrive();
-		break;
-
-	case 'e':
-		ESerial.reportArray("EE addresses: ", EE_index.addresses, MAX_EE_ADDRESSES);
-
-	default:
-		Serial.println("no comprendo");
-	}
-	ESerial.dumpLine();
-}
-
-int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
-{
-	int gain = 1; 
-	char c[10];
-	gain += Serial.readBytesUntil('\n', &c[1], 9);
-	gain <<= 4;		// multiply by 16
-	return gain;
-}
-void statusReport()
+void autoReport()
 {
 	if (digitalRead(cranking_pin))
 	{
@@ -349,7 +175,20 @@ void statusReport()
 		Serial.print(inj_duration);
 	}
 }
-const char loadData()
+
+
+// Serial functions
+const char saveData(void* obj_ptr = NULL)
+{
+	Parameter::save(&cranking_dur);
+	Parameter::save(&cold_threshold);
+	Scale::save(&choke_scale);
+	Scale::save(&temp_scale);
+	Scale::save(&air_rpm_scale);
+	Map::save(&inj_map);
+	Map::save(&correction_map);
+}
+const char loadData(void* obj_ptr)
 {
 	char good = 1;
 	good &= Parameter::load(&cranking_dur);
@@ -362,24 +201,150 @@ const char loadData()
 
 	if (!good)
 		Serial.println(F("not all data loaded"));
-	return good; 
+	return good;
 }
-void saveData()
+const char readStatus(void* obj_ptr = NULL)
 {
-	Parameter::save(&cranking_dur);
-	Parameter::save(&cold_threshold);
-	Scale::save(&choke_scale);
-	Scale::save(&temp_scale);
-	Scale::save(&air_rpm_scale);
-	Map::save(&inj_map);
-	Map::save(&correction_map);
+	Serial.print("air: ");
+	Serial.print(air_flow);
+	Serial.print(" rpm: ");
+	Serial.print(rpm);
+	Serial.print(" inj: ");
+	Serial.print(inj_duration);
+	Serial.print(" O2: ");
+	Serial.print(o2);
+	Serial.print(" eng_temp: ");
+	Serial.print(coolant_temp);
+	Serial.print(" air_temp: ");
+	Serial.println(air_temp);
 }
-void reportParams()
+const char readParams(void* obj_ptr = NULL)
 {
-	Serial.println(F("cold threshold, cranking duration : "));
-	Parameter::report(&cold_threshold);
-	Parameter::report(&cranking_dur);
+	Serial.print(F("cold threshold: "));
+	Parameter::read(&cold_threshold);
+	Serial.print(F("cranking duration : "));
+	Parameter::read(&cranking_dur);
 }
+const char readTaskTimes(void* obj_ptr = NULL)
+{
+	ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
+}
+const char increaseGlobal(void* obj_ptr = NULL)
+{
+	global_offset.value += getGain();
+	Serial.print(".");
+}
+const char decreaseGlobal(void* obj_ptr = NULL)
+{
+	global_offset.value -= getGain();
+	Serial.print(".");
+}
+const char enableDrive(void* obj_ptr = NULL)
+{
+	if (good_ee_loads)
+	{
+		digitalWrite(fuel_pin, HIGH);
+		digitalWrite(drv_en_pin, LOW);
+		//attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+		Serial.println("Armed.");
+	}
+	else
+		Serial.println("bad EE data, no go.");
+}
+const char disableDrive(void* obj_ptr = NULL)
+{
+	digitalWrite(fuel_pin, LOW);
+	digitalWrite(drv_en_pin, HIGH);		// this turns off the injectors and ignition
+	//detachInterrupt(4);
+	Serial.println("inj, fuel disabled.");
+}
+const char readEEAddresses(void* obj_ptr = NULL)
+{
+	ESerial.reportArray("EE addresses: ", EE_index.addresses, MAX_EE_ADDRESSES);
+}
+const char memory(void* obj_ptr = NULL)
+{
+	extern int __heap_start, *__brkval;
+	int free_ram, v;
+	free_ram = (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+
+	Serial.print(F("Free ram: "));
+	Serial.println(free_ram);
+}
+
+int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
+{
+	int gain = 1; 
+	char c[10];
+	gain += Serial.readBytesUntil('\n', &c[1], 9);
+	gain <<= 4;		// multiply by 16
+	return gain;
+}
+
+void initProtocol()
+{
+	ESerial.addCommand(F("mem"), memory, NULL);
+	ESerial.addCommand(F("save"), saveData, NULL);
+	ESerial.addCommand(F("load"), loadData, NULL);
+	ESerial.addCommand(F("stat"), readStatus, NULL);
+	ESerial.addCommand(F("para"), readParams, NULL);
+	ESerial.addCommand(F("task"), readTaskTimes, NULL);
+	ESerial.addCommand(F("+"), increaseGlobal, NULL);
+	ESerial.addCommand(F("-"), decreaseGlobal, NULL);
+	ESerial.addCommand(F("arm"), enableDrive, NULL);
+	ESerial.addCommand(F("x"), disableDrive, NULL);
+	ESerial.addCommand(F("ee"), readEEAddresses, NULL);
+
+
+	ESerial.addCommand(F("Winj"), Map::write, &inj_map);
+	ESerial.addCommand(F("rinj"), Map::read, &inj_map);
+	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);
+	ESerial.addCommand(F("linj"), Map::load, &inj_map);
+
+	// don't want write access to correction map.  Optimizer handles this.
+	ESerial.addCommand(F("rloc"), Map::read, &correction_map);
+	ESerial.addCommand(F("Sloc"), Map::save, &correction_map);
+	ESerial.addCommand(F("lloc"), Map::load, &correction_map);
+	ESerial.addCommand(F("Cloc"), Map::clear, &correction_map);
+	// don't want manual + or - control over correction map.  Optimizer handles this
+
+	ESerial.addCommand(F("Wglo"), Parameter::write, &global_offset);
+	ESerial.addCommand(F("rglo"), Parameter::read, &global_offset);
+	ESerial.addCommand(F("Sglo"), Parameter::save, &global_offset);
+	ESerial.addCommand(F("lglo"), Parameter::load, &global_offset);
+	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);
+
+	ESerial.addCommand(F("Wcho"), Scale::write, &choke_scale);
+	ESerial.addCommand(F("rcho"), Scale::read, &choke_scale);
+	ESerial.addCommand(F("Scho"), Scale::save, &choke_scale);
+	ESerial.addCommand(F("lcho"), Scale::load, &choke_scale);
+
+	ESerial.addCommand(F("Wtem"), Scale::write, &temp_scale);
+	ESerial.addCommand(F("rtem"), Scale::read, &temp_scale);
+	ESerial.addCommand(F("Stem"), Scale::save, &temp_scale);
+	ESerial.addCommand(F("ltem"), Scale::load, &temp_scale);
+
+	ESerial.addCommand(F("Wgri"), Scale::write, &air_rpm_scale);
+	ESerial.addCommand(F("rgri"), Scale::read, &air_rpm_scale);
+	ESerial.addCommand(F("Sgri"), Scale::save, &air_rpm_scale);
+	ESerial.addCommand(F("lgri"), Scale::load, &air_rpm_scale);
+
+	ESerial.addCommand(F("Wcld"), Parameter::write, &cold_threshold);
+	ESerial.addCommand(F("rcld"), Parameter::read, &cold_threshold);
+	ESerial.addCommand(F("Scld"), Parameter::save, &cold_threshold);
+	ESerial.addCommand(F("lcld"), Parameter::load, &cold_threshold);
+
+	ESerial.addCommand(F("Wcra"), Parameter::write, &cranking_dur);
+	ESerial.addCommand(F("rcra"), Parameter::read, &cranking_dur);
+	ESerial.addCommand(F("Scra"), Parameter::save, &cranking_dur);
+	ESerial.addCommand(F("lcra"), Parameter::load, &cranking_dur);
+
+	ESerial.addCommand(F("Wacc"), Parameter::write, &accel_stabilize_rate);
+	ESerial.addCommand(F("racc"), Parameter::read, &accel_stabilize_rate);
+	ESerial.addCommand(F("Sacc"), Parameter::save, &accel_stabilize_rate);
+	ESerial.addCommand(F("lacc"), Parameter::load, &accel_stabilize_rate);
+}
+
 
 // Sensor reading functions
 void readAirFlow()
@@ -394,8 +359,8 @@ void readAirFlow()
 
 	if (air_flow_snap)
 	{
-		if (air_flow_snap > air_stabilize_rate.value)
-			air_flow_snap -= air_stabilize_rate.value;
+		if (air_flow_snap > accel_stabilize_rate.value)
+			air_flow_snap -= accel_stabilize_rate.value;
 		else
 			air_flow_snap = 0;
 	}
@@ -528,25 +493,6 @@ int scaleRead(int x, const int x_array[], const int y_array[], char n)
 }
 
 // important commands
-void enableDrive()
-{
-	if (good_ee_loads)
-	{
-		digitalWrite(fuel_pin, HIGH);
-		digitalWrite(drv_en_pin, LOW);
-		//attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
-		Serial.println("Armed.");
-	}
-	else
-		Serial.println("bad EE data, no go.");
-}
-void disableDrive()
-{
-	digitalWrite(fuel_pin, LOW);
-	digitalWrite(drv_en_pin, HIGH);		// this turns off the injectors and ignition
-	//detachInterrupt(4);
-	Serial.println("inj, fuel disabled.");
-}
 
 // simple stuff
 void toggle(unsigned char pin) 

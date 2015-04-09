@@ -8,12 +8,12 @@
 class Map
 {
 public:
-	explicit Map(const Scale* scale_p, unsigned char size = 8, int z_upper = 3500, int z_lower = 300);
+	explicit Map(const Scale* scale_p, unsigned char size = 8, int z_lower = 3500, int z_upper = 300);
 	~Map();
 	
-	static const char receive(void * obj_ptr);
-	static const char report(const void* obj_ptr);
-	static const char save(const void * obj_ptr);
+	static const char write(void * obj_ptr);
+	static const char read(void* obj_ptr);
+	static const char save(void * obj_ptr);
 	static const char load(void * obj_ptr);
 	static const char clear(void * obj_ptr);
 
@@ -24,7 +24,8 @@ public:
 
 
 	int z[MAX_MAP_SIZE*MAX_MAP_SIZE];			// 100 ints 
-	int z_upper, z_lower, n;					// 3 ints
+	int z_upper, z_lower;
+	unsigned int n;								// 3 ints
 	unsigned char ee_address_reg_index;		// the index of the ee address 
 	const Scale* scale;
 

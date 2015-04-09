@@ -15,7 +15,7 @@ Parameter::~Parameter()
 {
 }
 
-const char Parameter::receive(void* obj_ptr)		// Note: this uses parseInt(), so it only really works for int. 
+const char Parameter::write(void* obj_ptr)		// Note: this uses parseInt(), so it only really works for int. 
 {
 	Parameter* self = (Parameter *)obj_ptr;
 	char good = 1;
@@ -39,7 +39,7 @@ const char Parameter::receive(void* obj_ptr)		// Note: this uses parseInt(), so 
 
 	ESerial.dumpLine();		// dump any additional characters. 
 
-	report(obj_ptr);
+	read(obj_ptr);
 	return 1;
 }
 
@@ -67,11 +67,11 @@ const char Parameter::load(void* obj_ptr)
 
 	self->value = new_value;
 
-	report(obj_ptr);
+	read(obj_ptr);
 	return 1;
 }
 
-void Parameter::report(void* obj_ptr)
+const char Parameter::read(void* obj_ptr)
 {
 	Serial.println(((Parameter*)obj_ptr)->value);
 }
@@ -91,6 +91,15 @@ const char Parameter::save(void* obj_ptr)
 	address += EEPROM_writeAnything(address, self->value);
 
 	Serial.println(F("saved parameter to EE"));
+}
+
+const char Parameter::clear(void* obj_ptr)
+{
+	Parameter* self = (Parameter *)obj_ptr;
+	if (self->min_ < 0)
+		self->value = 0;
+	else
+		self->value = self->min_;
 }
 
 const unsigned int Parameter::getEEAddy(unsigned int size)

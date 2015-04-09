@@ -6,20 +6,20 @@
 class Scale
 {
 public:
-	Scale(unsigned char n_p = 8);
+	Scale(int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p = 8);
 	~Scale();
 
-	static const char receive(void * obj_ptr);
-	static const char report(const void* obj_ptr);
+	static const char write(void * obj_ptr);
+	static const char read(void * obj_ptr);
 	static const char load(void * obj_ptr);
-	static const char save(const void * obj_ptr);
+	static const char save(void * obj_ptr);
 
 	int interpolate( int x_key);	
 
 	int x[SCALE_SIZE_MAX], y[SCALE_SIZE_MAX];		// arrays that define a line for scaling inputs to outputs. 
 	int x_upper, x_lower;						// upper/lower limits for elements of x
 	int y_upper, y_lower;						// upper/lower limits for elements of y
-	int n;										// the number elements in each array x, y
+	unsigned int n;								// the number elements in each array x, y
 	unsigned int ee_address;
 
 private:
