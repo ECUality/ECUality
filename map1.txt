@@ -25,13 +25,14 @@ Winj 8
 # choke scale (extra injector duration vs coolant temperature) 
 
 Wacc 20
-Wcld 140
+Wcld 150
 Wcra 1350
-Wcho 4
-temp	160	100	50	10
-choke	20	200	700	1024
+
+Wcho 5
+temp	150	100	50	10	-20
+choke	5	200	600	800	1000
 
 
-Wtem 11
-563	454	356	278	208	157	116	88	66	52	41
-32	50	68	86	104	122	140	158	176	194	212
+Wtem 12
+563	454	356	278	208	157	116	88	66	52	41	32
+32	50	68	86	104	122	140	158	176	194	212	230

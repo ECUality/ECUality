@@ -73,7 +73,6 @@ const char Map::load(void* obj_ptr)
 	self->n = new_n;
 	copyArray(new_z, self->z, new_n*new_n);
 
-	Serial.println(F("loaded map from EE."));
 	return 1;
 }
 
@@ -83,7 +82,7 @@ const char Map::read(void* obj_ptr)
 	int i;
 	ESerial.reportArray("air_gridline:\n", self->scale->x, self->n);
 	ESerial.reportArray("rpm_gridline:\n", self->scale->y, self->n);
-	Serial.println("engine_map:");
+	Serial.println(F("map:"));
 	for (i = 0; i < self->n; ++i)
 	{
 		ESerial.reportArray(" ", &self->z[self->n*i], self->n);
@@ -265,7 +264,7 @@ void Map::offsetZPoint(char i_rpm, char i_air, int offset)
 {
 	if ((i_rpm >= n) || (i_rpm < 0) || (i_air >= n) || (i_air < 0))
 	{
-		Serial.println("index out of bounds");
+		Serial.println(F("index out of bounds"));
 		return;
 	}
 	z[n*i_rpm + i_air] += offset;

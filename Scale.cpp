@@ -115,7 +115,7 @@ int Scale::interpolate(int x_key)
 		return linearInterp(x_key, x[0], x[1], y[0], y[1]);
 
 	else				// x_key is to right of graph. Use rightmost points.
-		return linearInterp(x_key, x[n - 1], x[n], y[n - 1], y[n]);
+		return linearInterp(x_key, x[n - 2], x[n-1], y[n - 2], y[n-1]);
 }
 
 const bool Scale::verify(const int new_x[], const int new_y[], const int new_n)

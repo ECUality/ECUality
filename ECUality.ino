@@ -8,53 +8,12 @@
 #include "EEIndex.h"
 #include <eeprom.h>
 #include "EEPROMAnything.h"
-
-#define PARAM_EE_ADR	0
-#define MAP_EE_ADR		100
-#define OFFSET_EE_ADR	600
-
-#define N_CHOKE_SCALE	4U
-
-// Pin mappings
-const uint8_t air_flow_pin = A12;
-const uint8_t air_temp_pin = A14;
-const uint8_t o2_pin = A9;
-const uint8_t coolant_temp_pin = A13;
-const uint8_t oil_pressure_pin = A11;
-const uint8_t tach_pin = 19;
-const uint8_t idl_full_pin = A10;
-const uint8_t cranking_pin = 10;
-
-const uint8_t inputs[] = { air_flow_pin, air_temp_pin, o2_pin, coolant_temp_pin, oil_pressure_pin, tach_pin,
-	idl_full_pin, cranking_pin, '\0'};
-
-// Output pins
-const uint8_t inj2_pin = 42;
-const uint8_t inj3_pin = 44;
-const uint8_t inj4_pin = 46;
-const uint8_t inj1_pin = 48;
-
-const uint8_t coil1_pin = 28;
-const uint8_t coil2_pin = 26;
-const uint8_t coil3_pin = 24;
-const uint8_t coil4_pin = 22;
-
-const uint8_t fuel_pin = A8;
-const uint8_t drv_en_pin = 38;
-const uint8_t o2_pwr_pin = A1;
-const uint8_t cs_knock = 9;
-const uint8_t cs_sd = 12;
-const uint8_t cs_inj = 36;
-const uint8_t inj_led = 25;
-
-uint8_t outputs[] = { inj1_pin, inj2_pin, inj3_pin, inj4_pin, 
-	coil1_pin, coil2_pin, coil3_pin, coil4_pin,
-	fuel_pin, drv_en_pin, o2_pwr_pin, 
-	cs_knock, cs_sd, cs_inj, inj_led, '\0'};
+#include "ECUPins.h"
 
 
 // operating control variables
 char good_ee_loads;
+char auto_stat;
 
 // task variables
 unsigned int ms_freq_of_task[20];
@@ -80,15 +39,14 @@ Parameter global_offset(-1000, 1000);
 Parameter accel_stabilize_rate(5, 500);		// the rate at which accelerator pump transient decays.
 Parameter cold_threshold (80, 190);			// the temperature below which enrichment kicks in.  (100F to 150F)
 Parameter cranking_dur (800, 3000);			// the injector duration while cranking not counting choke (500 - 2000) 
-Scale choke_scale (-40, 200, 0, 2000, 4);	// scales engine temperature to added injector time 
-Scale temp_scale (1, 1000, -10, 220, 11);	// scales measured voltage on temp sensors to actual temp. in F
+Scale choke_scale (-40, 200, 0, 2000, 0);	// scales engine temperature to "per 1024" (think percent) increase of injector itme
+Scale temp_scale (0, 1023, -40, 250, 12);	// scales measured voltage on temp sensors to actual temp. in F
 Scale air_rpm_scale (0, 255, 200, 6000, 8);	// the x and y gridlines (air-flow and rpm) for the injector map.  (not a scaling function) 
 Map inj_map (&air_rpm_scale, 8, 400, 3000);	// the 2d map defining injector durations with respect to air-flow and rpm
 Map correction_map (&air_rpm_scale, 8, -1500, 1500); // local modifications to the inj_map, applied by the optimizer. 
 
 
  //////////////////// pogram ///////////////////
-const char loadData(void* obj_ptr = NULL);
 void setup()
 {
 	Serial.begin(115200);
@@ -105,9 +63,9 @@ void setup()
 	n_tasks = 9;
 
 	// input interrupt pin
-	digitalWrite(cs_knock, HIGH);
-	digitalWrite(cs_inj, HIGH);
-	digitalWrite(cs_sd, HIGH);
+	digitalWrite(cs_knock_pin, HIGH);
+	digitalWrite(cs_inj_pin, HIGH);
+	digitalWrite(cs_sd_pin, HIGH);
 
 	setPinModes(inputs, INPUT);
 	setPinModes(outputs, OUTPUT);
@@ -169,16 +127,13 @@ void loop()
 
 void autoReport()
 {
-	if (digitalRead(cranking_pin))
-	{
-		Serial.print(" ");
-		Serial.print(inj_duration);
-	}
+	if (auto_stat)
+		readStatus(NULL);
 }
 
 
 // Serial functions
-const char saveData(void* obj_ptr = NULL)
+const char saveData(void* obj_ptr)
 {
 	Parameter::save(&cranking_dur);
 	Parameter::save(&cold_threshold);
@@ -201,68 +156,74 @@ const char loadData(void* obj_ptr)
 
 	if (!good)
 		Serial.println(F("not all data loaded"));
+	else
+		Serial.println(F("all data loaded"));
 	return good;
 }
-const char readStatus(void* obj_ptr = NULL)
+const char readStatus(void* obj_ptr)
 {
-	Serial.print("air: ");
+	Serial.print(F("air: "));
 	Serial.print(air_flow);
-	Serial.print(" rpm: ");
+	Serial.print(F(" rpm: "));
 	Serial.print(rpm);
-	Serial.print(" inj: ");
+	Serial.print(F(" inj: "));
 	Serial.print(inj_duration);
-	Serial.print(" O2: ");
+	Serial.print(F(" O2: "));
 	Serial.print(o2);
-	Serial.print(" eng_temp: ");
+	Serial.print(F(" eng_temp: "));
 	Serial.print(coolant_temp);
-	Serial.print(" air_temp: ");
+	Serial.print(F(" air_temp: "));
 	Serial.println(air_temp);
 }
-const char readParams(void* obj_ptr = NULL)
+const char toggleAutoStatus(void* obj_ptr)
+{
+	auto_stat = !auto_stat;
+}
+const char readParams(void* obj_ptr)
 {
 	Serial.print(F("cold threshold: "));
 	Parameter::read(&cold_threshold);
 	Serial.print(F("cranking duration : "));
 	Parameter::read(&cranking_dur);
 }
-const char readTaskTimes(void* obj_ptr = NULL)
+const char readTaskTimes(void* obj_ptr)
 {
 	ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
 }
-const char increaseGlobal(void* obj_ptr = NULL)
+const char increaseGlobal(void* obj_ptr)
 {
 	global_offset.value += getGain();
 	Serial.print(".");
 }
-const char decreaseGlobal(void* obj_ptr = NULL)
+const char decreaseGlobal(void* obj_ptr)
 {
 	global_offset.value -= getGain();
 	Serial.print(".");
 }
-const char enableDrive(void* obj_ptr = NULL)
+const char enableDrive(void* obj_ptr)
 {
 	if (good_ee_loads)
 	{
 		digitalWrite(fuel_pin, HIGH);
 		digitalWrite(drv_en_pin, LOW);
 		//attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
-		Serial.println("Armed.");
+		Serial.println(F("Armed."));
 	}
 	else
-		Serial.println("bad EE data, no go.");
+		Serial.println(F("bad EE data, no go."));
 }
-const char disableDrive(void* obj_ptr = NULL)
+const char disableDrive(void* obj_ptr)
 {
 	digitalWrite(fuel_pin, LOW);
 	digitalWrite(drv_en_pin, HIGH);		// this turns off the injectors and ignition
 	//detachInterrupt(4);
-	Serial.println("inj, fuel disabled.");
+	Serial.println(F("inj, fuel disabled."));
 }
-const char readEEAddresses(void* obj_ptr = NULL)
+const char readEEAddresses(void* obj_ptr)
 {
 	ESerial.reportArray("EE addresses: ", EE_index.addresses, MAX_EE_ADDRESSES);
 }
-const char memory(void* obj_ptr = NULL)
+const char memory(void* obj_ptr)
 {
 	extern int __heap_start, *__brkval;
 	int free_ram, v;
@@ -286,7 +247,7 @@ void initProtocol()
 	ESerial.addCommand(F("mem"), memory, NULL);
 	ESerial.addCommand(F("save"), saveData, NULL);
 	ESerial.addCommand(F("load"), loadData, NULL);
-	ESerial.addCommand(F("stat"), readStatus, NULL);
+	ESerial.addCommand(F("stat"), toggleAutoStatus, NULL);
 	ESerial.addCommand(F("para"), readParams, NULL);
 	ESerial.addCommand(F("task"), readTaskTimes, NULL);
 	ESerial.addCommand(F("+"), increaseGlobal, NULL);
@@ -296,10 +257,10 @@ void initProtocol()
 	ESerial.addCommand(F("ee"), readEEAddresses, NULL);
 
 
-	ESerial.addCommand(F("Winj"), Map::write, &inj_map);
-	ESerial.addCommand(F("rinj"), Map::read, &inj_map);
-	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);
-	ESerial.addCommand(F("linj"), Map::load, &inj_map);
+	ESerial.addCommand(F("Winj"), Map::write, &inj_map);	// write a new injector map from what I send you next
+	ESerial.addCommand(F("rinj"), Map::read, &inj_map);		// report the injector map to the serial port
+	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);		// save the injector map to EEPROM
+	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM
 
 	// don't want write access to correction map.  Optimizer handles this.
 	ESerial.addCommand(F("rloc"), Map::read, &correction_map);

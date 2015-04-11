@@ -82,6 +82,7 @@
     <ClInclude Include="Arrays.h">
       <FileType>CppCode</FileType>
     </ClInclude>
+    <ClInclude Include="ECUPins.h" />
     <ClInclude Include="ECUSerial.h" />
     <ClInclude Include="EEIndex.h" />
     <ClInclude Include="EEPROMAnything.h" />
