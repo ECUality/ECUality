@@ -67,26 +67,28 @@ void FuelTweaker::tweakGlobalvO2()
 void FuelTweaker::tweakLocalAndGlobalvO2()
 {
 	mode = 3;
-	if (o2 > o2_upper_thresh.value)
+	if (o2 > o2_upper_thresh.value)					// rich:  reduce offsets
 	{
-		if (local_sum >= local_sum_limit.value)
+		if (local_sum <= -local_sum_limit.value)
 			global_offset -= step_size.value;
 		
 		else
 		{
 			offset_map.localOffset(rpm, air_flow, -step_size.value);
 			change_map.localOffset(rpm, air_flow, -step_size.value);
+			local_sum -= step_size.value;
 		}
 	}
-	else if (o2 < o2_lower_thresh.value)
+	else if (o2 < o2_lower_thresh.value)			// lean:  increase offsets
 	{
-		if (local_sum <= -local_sum_limit.value)
+		if (local_sum >= local_sum_limit.value)
 			global_offset += step_size.value;
 
 		else
 		{
 			offset_map.localOffset(rpm, air_flow, step_size.value);
 			change_map.localOffset(rpm, air_flow, step_size.value);
+			local_sum += step_size.value;
 		}
 	}
 }

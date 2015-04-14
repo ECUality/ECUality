@@ -1,7 +1,26 @@
 
 
-O2: 500	Temp: 135
 
+# acceleration enrichment stabilize rate
+# cold engine threshold 
+# cranking duration nominal 
+# choke scale (extra injector duration vs coolant temperature) 
+
+Wcrp 1600
+Wirp 1300
+Wath 90
+Wacc 20
+Wcld 150
+Wcra 1350
+
+Wcho 5
+temp	150	100	50	10	-20
+choke	5	200	600	800	1000
+
+
+Wtem 12
+563	454	356	278	208	157	116	88	66	52	41	32
+32	50	68	86	104	122	140	158	176	194	212	230
 
 Wgri 8	
 air:	220	180	140	100	80	60	40	20	
@@ -17,22 +36,11 @@ Winj 8
 	2473	2161	1900	1744	1484	1166	988	925
 	2473	2160	1899	1789	1537	1301	1185	1129
 
-
-
-# acceleration enrichment stabilize rate
-# cold engine threshold 
-# cranking duration nominal 
-# choke scale (extra injector duration vs coolant temperature) 
-
-Wacc 20
-Wcld 150
-Wcra 1350
-
-Wcho 5
-temp	150	100	50	10	-20
-choke	5	200	600	800	1000
-
-
-Wtem 12
-563	454	356	278	208	157	116	88	66	52	41	32
-32	50	68	86	104	122	140	158	176	194	212	230
+## O2 lower thresh	/  o2 upper thresh	/  O2 warming time 
+## local sum limit	/  tweak size		/  engine warming time
+Wolt 350
+Wout 570
+Wowi 40
+Wlsl 64
+Wtsz 8
+Wewi 1200

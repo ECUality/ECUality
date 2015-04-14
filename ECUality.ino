@@ -39,6 +39,9 @@ int air_flow_d, air_flow_snap, o2_d;
 
 
 Parameter global_offset("global_offset",-1000, 1000);
+Parameter coasting_rpm("coasting_rpm", 800, 2500);
+Parameter idling_rpm("idling_rpm", 400, 2200);
+Parameter air_thresh("air_thresh", 50, 125);
 Parameter accel_stabilize_rate("accel_stabilize_rate", 5, 500);		// the rate at which accelerator pump transient decays.
 Parameter cold_threshold ("cold_thresh", 80, 190);			// the temperature below which enrichment kicks in.  (100F to 150F)
 Parameter cranking_dur ("cranking_dur", 800, 3000);			// the injector duration while cranking not counting choke (500 - 2000) 
@@ -133,29 +136,29 @@ void loop()
 }
 
 
-void autoReport()
-{
-	if (auto_stat)
-		readStatus(NULL);
-}
 
 
 // Serial functions
 const char saveData(void* obj_ptr)
 {
-	Parameter::save(&cranking_dur);
+	Parameter::save(&coasting_rpm);
+	Parameter::save(&idling_rpm);
+	Parameter::save(&air_thresh);
 	Parameter::save(&cold_threshold);
+	Parameter::save(&cranking_dur);
 	Scale::save(&choke_scale);
 	Scale::save(&temp_scale);
 	Scale::save(&air_rpm_scale);
 	Map::save(&inj_map);
-	Map::save(&offset_map);
 }
 const char loadData(void* obj_ptr)
 {
 	char good = 1;
-	good &= Parameter::load(&cranking_dur);
+	good &= Parameter::load(&coasting_rpm);
+	good &= Parameter::load(&idling_rpm);
+	good &= Parameter::load(&air_thresh);
 	good &= Parameter::load(&cold_threshold);
+	good &= Parameter::load(&cranking_dur);
 	good &= Scale::load(&choke_scale);
 	good &= Scale::load(&temp_scale);
 	good &= Scale::load(&air_rpm_scale);
@@ -169,36 +172,70 @@ const char loadData(void* obj_ptr)
 		Serial.println(F("all data loaded"));
 	return good;
 }
-const char readStatus(void* obj_ptr)
+
+const char reportStatus(void* obj_ptr)
 {
 	Serial.print(F("air: "));
 	Serial.print(air_flow);
-	Serial.print(F(" rpm: "));
+	Serial.print(F("  rpm: "));
 	Serial.print(rpm);
-	Serial.print(F(" inj: "));
+	Serial.print(F("  inj: "));
 	Serial.print(inj_duration);
-	Serial.print(F(" O2: "));
+	Serial.print(F("  O2: "));
 	Serial.print(o2);
-	Serial.print(F(" temp: "));
+	Serial.print(F("  temp: "));
 	Serial.print(coolant_temp);
-	Serial.print(F(" glo_offset: "));
-	Serial.println(global_offset.value);
+	Serial.print(F("  glo_offset: "));
+	Serial.print(global_offset.value);
+	Serial.print("  ");
+	reportMode(NULL);
+}
+const char reportMode(void* obj_ptr)
+{
+	if (run_condition & _BV(NOT_RUNNING))
+		Serial.print(F("not running,  "));
+	else if (run_condition & _BV(CRANKING))
+		Serial.print(F("cranking,  "));
+	else if (run_condition & _BV(COASTING))
+		Serial.print(F("coasting,  "));
+	else if (run_condition & _BV(IDLING))
+		Serial.print(F("idling,  "));
+	else if (run_condition & _BV(WIDE_OPEN))
+		Serial.print(F("hopefully hauling ass,  "));
+	else
+		Serial.print(F("pulling,  "));
+
+	if (run_condition & _BV(WARM))
+		Serial.println(F("warm"));
+	else
+		Serial.println(F("cold"));
+}
+const char reportParams(void* obj_ptr)
+{
+	Parameter::read(&coasting_rpm);
+	Parameter::read(&idling_rpm);
+	Parameter::read(&air_thresh);
+	Parameter::read(&cold_threshold);
+	Parameter::read(&cranking_dur);
+}
+const char reportEEAddresses(void* obj_ptr)
+{
+	ESerial.reportArray("EE addresses: ", EE_index.addresses, MAX_EE_ADDRESSES);
+}
+const char reportTaskTimes(void* obj_ptr)
+{
+	ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
 }
 const char toggleAutoStatus(void* obj_ptr)
 {
 	auto_stat = !auto_stat;
 }
-const char readParams(void* obj_ptr)
+void autoReport()
 {
-	Serial.print(F("cold threshold: "));
-	Parameter::read(&cold_threshold);
-	Serial.print(F("cranking duration : "));
-	Parameter::read(&cranking_dur);
+	if (auto_stat)
+		reportStatus(NULL);
 }
-const char readTaskTimes(void* obj_ptr)
-{
-	ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
-}
+
 const char increaseGlobal(void* obj_ptr)
 {
 	global_offset.value += getGain();
@@ -228,10 +265,6 @@ const char disableDrive(void* obj_ptr)
 	//detachInterrupt(4);
 	Serial.println(F("inj, fuel disabled."));
 }
-const char readEEAddresses(void* obj_ptr)
-{
-	ESerial.reportArray("EE addresses: ", EE_index.addresses, MAX_EE_ADDRESSES);
-}
 const char memory(void* obj_ptr)
 {
 	extern int __heap_start, *__brkval;
@@ -241,26 +274,7 @@ const char memory(void* obj_ptr)
 	Serial.print(F("Free ram: "));
 	Serial.println(free_ram);
 }
-const char readMode(void* obj_ptr)
-{
-	if (run_condition & _BV(NOT_RUNNING))
-		Serial.print(F("not running,  "));
-	else if (run_condition & _BV(CRANKING))
-		Serial.print(F("cranking,  "));
-	else if (run_condition & _BV(COASTING))
-		Serial.print(F("coasting,  "));
-	else if (run_condition & _BV(IDLING))
-		Serial.print(F("idling,  "));
-	else if (run_condition & _BV(WIDE_OPEN))
-		Serial.print(F("hopefully hauling ass,  "));
-	else 
-		Serial.print(F("pulling,  "));
 
-	if (run_condition & _BV(WARM))
-		Serial.println(F("warm"));
-	else
-		Serial.println(F("cold"));
-}
 
 int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
 {
@@ -277,15 +291,15 @@ void initProtocol()
 	ESerial.addCommand(F("arm"), enableDrive, NULL);
 	ESerial.addCommand(F("auto"), toggleAutoStatus, NULL);
 	ESerial.addCommand(F("lock"), FuelTweaker::lock, &boss);
-	ESerial.addCommand(F("mode"), readMode, NULL);
+	ESerial.addCommand(F("mode"), reportMode, NULL);
 	ESerial.addCommand(F("+"), increaseGlobal, NULL);
 	ESerial.addCommand(F("-"), decreaseGlobal, NULL);
-	ESerial.addCommand(F("stat"), readStatus, NULL);
-	ESerial.addCommand(F("para"), readParams, NULL);
+	ESerial.addCommand(F("stat"), reportStatus, NULL);
+	ESerial.addCommand(F("para"), reportParams, NULL);
 	ESerial.addCommand(F("save"), saveData, NULL);
 	ESerial.addCommand(F("load"), loadData, NULL);
-	ESerial.addCommand(F("ee"), readEEAddresses, NULL);
-	ESerial.addCommand(F("task"), readTaskTimes, NULL);
+	ESerial.addCommand(F("ee"), reportEEAddresses, NULL);
+	ESerial.addCommand(F("task"), reportTaskTimes, NULL);
 	ESerial.addCommand(F("mem"), memory, NULL);
 
 
@@ -300,6 +314,9 @@ void initProtocol()
 	ESerial.addCommand(F("Wtsz"), Parameter::write, &(boss.step_size));
 	ESerial.addCommand(F("Wewi"), Parameter::write, &(boss.time_eng_warm_thresh));
 	
+	ESerial.addCommand(F("Wcrp"), Parameter::write, &coasting_rpm);
+
+	ESerial.addCommand(F("Wirp"), Parameter::write, &idling_rpm);
 	
 	ESerial.addCommand(F("Winj"), Map::write, &inj_map);	// write a new injector map from what I send you next
 	ESerial.addCommand(F("rinj"), Map::read, &inj_map);		// report the injector map to the serial port
@@ -337,6 +354,26 @@ void initProtocol()
 	ESerial.addCommand(F("Sgri"), Scale::save, &air_rpm_scale);
 	ESerial.addCommand(F("lgri"), Scale::load, &air_rpm_scale);
 
+	ESerial.addCommand(F("Wcrp"), Parameter::write, &coasting_rpm);
+	ESerial.addCommand(F("rcrp"), Parameter::read, &coasting_rpm);
+	ESerial.addCommand(F("Scrp"), Parameter::save, &coasting_rpm);
+	ESerial.addCommand(F("lcrp"), Parameter::load, &coasting_rpm);
+
+	ESerial.addCommand(F("Wirp"), Parameter::write, &idling_rpm);
+	ESerial.addCommand(F("rirp"), Parameter::read, &idling_rpm);
+	ESerial.addCommand(F("Sirp"), Parameter::save, &idling_rpm);
+	ESerial.addCommand(F("lirp"), Parameter::load, &idling_rpm);
+
+	ESerial.addCommand(F("Wath"), Parameter::write, &air_thresh);
+	ESerial.addCommand(F("rath"), Parameter::read, &air_thresh);
+	ESerial.addCommand(F("Sath"), Parameter::save, &air_thresh);
+	ESerial.addCommand(F("lath"), Parameter::load, &air_thresh);
+
+	ESerial.addCommand(F("Wcld"), Parameter::write, &cold_threshold);
+	ESerial.addCommand(F("rcld"), Parameter::read, &cold_threshold);
+	ESerial.addCommand(F("Scld"), Parameter::save, &cold_threshold);
+	ESerial.addCommand(F("lcld"), Parameter::load, &cold_threshold);
+
 	ESerial.addCommand(F("Wcld"), Parameter::write, &cold_threshold);
 	ESerial.addCommand(F("rcld"), Parameter::read, &cold_threshold);
 	ESerial.addCommand(F("Scld"), Parameter::save, &cold_threshold);
@@ -352,7 +389,6 @@ void initProtocol()
 	ESerial.addCommand(F("Sacc"), Parameter::save, &accel_stabilize_rate);
 	ESerial.addCommand(F("lacc"), Parameter::load, &accel_stabilize_rate);
 }
-
 
 // Sensor reading functions
 void readAirFlow()
@@ -478,13 +514,13 @@ void updateRunCondition()
 	else if (digitalRead(cranking_pin))
 		run_condition |= _BV(CRANKING);
 
-	else if (idl_or_full && (air_flow < 80) && (rpm > 1200))
+	else if (idl_or_full && (air_flow < air_thresh.value) && (rpm > coasting_rpm.value))
 		run_condition |= _BV(COASTING);
 
-	else if (idl_or_full && (air_flow < 80) && (rpm < 1000))
+	else if (idl_or_full && (air_flow < air_thresh.value) && (rpm < idling_rpm.value))
 		run_condition |= _BV(IDLING);
 
-	else if (idl_or_full && (air_flow > 80))
+	else if (idl_or_full && (air_flow > air_thresh.value))
 		run_condition |= _BV(WIDE_OPEN);
 
 	if (coolant_temp >= cold_threshold.value)

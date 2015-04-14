@@ -13,7 +13,7 @@ class FuelTweaker
 	unsigned int time_warming_o2; 
 	unsigned int time_eng_warm; 
 	unsigned int rpm_old;
-	unsigned int local_sum;
+	int local_sum;
 	unsigned int ee_addy;
 	
 	const unsigned char& run_condition;
