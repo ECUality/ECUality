@@ -1,7 +1,7 @@
 #pragma once
 
-#define MAX_EE_ADDRESSES 20
-#define EE_AVAILABLE     2000
+#define MAX_EE_ADDRESSES 40
+#define EE_AVAILABLE     3000
 
 class EEIndex
 {

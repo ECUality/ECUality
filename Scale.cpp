@@ -40,8 +40,6 @@ const char Scale::write(void* obj_ptr)
 	copyArray(new_x, self->x, new_n);
 	copyArray(new_y, self->y, new_n);
 
-	ESerial.dumpLine();		// dump any additional characters. 
-
 	read(obj_ptr);
 	return 1;
 }

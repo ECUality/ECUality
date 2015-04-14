@@ -3,11 +3,12 @@
 #include "EEPROMAnything.h"
 #include "EEIndex.h"
 
-Parameter::Parameter(int minimum, int maximum)
+Parameter::Parameter(char* name_, int minimum, int maximum)
 {
 	min_ = minimum;
 	max_ = maximum;
 	value = 0;
+	name = name_;
 	ee_address = getEEAddy(4);
 }
 
@@ -36,8 +37,6 @@ const char Parameter::write(void* obj_ptr)		// Note: this uses parseInt(), so it
 	}
 
 	self->value = new_value;
-
-	ESerial.dumpLine();		// dump any additional characters. 
 
 	read(obj_ptr);
 	return 1;
@@ -72,7 +71,10 @@ const char Parameter::load(void* obj_ptr)
 
 const char Parameter::read(void* obj_ptr)
 {
-	Serial.println(((Parameter*)obj_ptr)->value);
+	Parameter* self = (Parameter *)obj_ptr;
+	Serial.print(self->name);
+	Serial.print(": ");
+	Serial.println(self->value);
 }
 
 const char Parameter::save(void* obj_ptr)
@@ -89,7 +91,7 @@ const char Parameter::save(void* obj_ptr)
 
 	address += EEPROM_writeAnything(address, self->value);
 
-	Serial.println(F("saved parameter to EE"));
+	Serial.print(F("."));
 }
 
 const char Parameter::clear(void* obj_ptr)

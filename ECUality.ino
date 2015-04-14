@@ -1,4 +1,5 @@
 
+#include "Defines.h"
 #include "Arrays.h"
 #include "Map.h"
 #include "Scale.h"
@@ -9,11 +10,13 @@
 #include <eeprom.h>
 #include "EEPROMAnything.h"
 #include "ECUPins.h"
+#include "FuelTweaker.h"
 
 
 // operating control variables
 char good_ee_loads;
 char auto_stat;
+unsigned char run_condition;
 
 // task variables
 unsigned int ms_freq_of_task[20];
@@ -35,15 +38,17 @@ int air_flow_d, air_flow_snap, o2_d;
 //int choke_scale_z[] = { 20, 200, 700, 1000 };	// these are actually fractions z/1024
 
 
-Parameter global_offset(-1000, 1000);
-Parameter accel_stabilize_rate(5, 500);		// the rate at which accelerator pump transient decays.
-Parameter cold_threshold (80, 190);			// the temperature below which enrichment kicks in.  (100F to 150F)
-Parameter cranking_dur (800, 3000);			// the injector duration while cranking not counting choke (500 - 2000) 
+Parameter global_offset("global_offset",-1000, 1000);
+Parameter accel_stabilize_rate("accel_stabilize_rate", 5, 500);		// the rate at which accelerator pump transient decays.
+Parameter cold_threshold ("cold_thresh", 80, 190);			// the temperature below which enrichment kicks in.  (100F to 150F)
+Parameter cranking_dur ("cranking_dur", 800, 3000);			// the injector duration while cranking not counting choke (500 - 2000) 
 Scale choke_scale (-40, 200, 0, 2000, 0);	// scales engine temperature to "per 1024" (think percent) increase of injector itme
 Scale temp_scale (0, 1023, -40, 250, 12);	// scales measured voltage on temp sensors to actual temp. in F
 Scale air_rpm_scale (0, 255, 200, 6000, 8);	// the x and y gridlines (air-flow and rpm) for the injector map.  (not a scaling function) 
 Map inj_map (&air_rpm_scale, 8, 400, 3000);	// the 2d map defining injector durations with respect to air-flow and rpm
-Map correction_map (&air_rpm_scale, 8, -1500, 1500); // local modifications to the inj_map, applied by the optimizer. 
+Map offset_map (&air_rpm_scale, 8, -1500, 1500); // local modifications to the inj_map, applied by the optimizer. 
+Map change_map (&air_rpm_scale, 8, -1500, 1500);	// map that contains the changes made since power-up. 
+FuelTweaker boss(run_condition, air_flow, rpm, o2, global_offset.value, offset_map, change_map);
 
 
  //////////////////// pogram ///////////////////
@@ -59,8 +64,10 @@ void setup()
 	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
 	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
 	task[7] = readOilPressure;		ms_freq_of_task[7] = 250;
-	task[8] = autoReport;			ms_freq_of_task[8] = 250;
-	n_tasks = 9;
+	task[8] = autoReport;			ms_freq_of_task[8] = 1000;
+	task[9] = updateRunCondition;	ms_freq_of_task[9] = 100;
+	task[10] = tweakFuel;			ms_freq_of_task[10] = TWEAK_FREQ_MS;
+	n_tasks = 11;
 
 	// input interrupt pin
 	digitalWrite(cs_knock_pin, HIGH);
@@ -77,6 +84,7 @@ void setup()
 
 	inj_duration = 5;
 	
+	Map::clear(&change_map);
 	good_ee_loads = loadData(NULL);		// load data from EE.
 
 	initProtocol();						// set up protocol. 
@@ -141,7 +149,7 @@ const char saveData(void* obj_ptr)
 	Scale::save(&temp_scale);
 	Scale::save(&air_rpm_scale);
 	Map::save(&inj_map);
-	Map::save(&correction_map);
+	Map::save(&offset_map);
 }
 const char loadData(void* obj_ptr)
 {
@@ -152,7 +160,8 @@ const char loadData(void* obj_ptr)
 	good &= Scale::load(&temp_scale);
 	good &= Scale::load(&air_rpm_scale);
 	good &= Map::load(&inj_map);
-	good &= Map::load(&correction_map);
+	good &= Map::load(&offset_map);
+	good &= FuelTweaker::load(&boss);
 
 	if (!good)
 		Serial.println(F("not all data loaded"));
@@ -170,10 +179,10 @@ const char readStatus(void* obj_ptr)
 	Serial.print(inj_duration);
 	Serial.print(F(" O2: "));
 	Serial.print(o2);
-	Serial.print(F(" eng_temp: "));
+	Serial.print(F(" temp: "));
 	Serial.print(coolant_temp);
-	Serial.print(F(" air_temp: "));
-	Serial.println(air_temp);
+	Serial.print(F(" glo_offset: "));
+	Serial.println(global_offset.value);
 }
 const char toggleAutoStatus(void* obj_ptr)
 {
@@ -232,6 +241,26 @@ const char memory(void* obj_ptr)
 	Serial.print(F("Free ram: "));
 	Serial.println(free_ram);
 }
+const char readMode(void* obj_ptr)
+{
+	if (run_condition & _BV(NOT_RUNNING))
+		Serial.print(F("not running,  "));
+	else if (run_condition & _BV(CRANKING))
+		Serial.print(F("cranking,  "));
+	else if (run_condition & _BV(COASTING))
+		Serial.print(F("coasting,  "));
+	else if (run_condition & _BV(IDLING))
+		Serial.print(F("idling,  "));
+	else if (run_condition & _BV(WIDE_OPEN))
+		Serial.print(F("hopefully hauling ass,  "));
+	else 
+		Serial.print(F("pulling,  "));
+
+	if (run_condition & _BV(WARM))
+		Serial.println(F("warm"));
+	else
+		Serial.println(F("cold"));
+}
 
 int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
 {
@@ -244,30 +273,48 @@ int getGain()		// this is just the number of characters before the newline '\n' 
 
 void initProtocol()
 {
-	ESerial.addCommand(F("mem"), memory, NULL);
-	ESerial.addCommand(F("save"), saveData, NULL);
-	ESerial.addCommand(F("load"), loadData, NULL);
-	ESerial.addCommand(F("stat"), toggleAutoStatus, NULL);
-	ESerial.addCommand(F("para"), readParams, NULL);
-	ESerial.addCommand(F("task"), readTaskTimes, NULL);
+	ESerial.addCommand(F("x"), disableDrive, NULL);
+	ESerial.addCommand(F("arm"), enableDrive, NULL);
+	ESerial.addCommand(F("auto"), toggleAutoStatus, NULL);
+	ESerial.addCommand(F("lock"), FuelTweaker::lock, &boss);
+	ESerial.addCommand(F("mode"), readMode, NULL);
 	ESerial.addCommand(F("+"), increaseGlobal, NULL);
 	ESerial.addCommand(F("-"), decreaseGlobal, NULL);
-	ESerial.addCommand(F("arm"), enableDrive, NULL);
-	ESerial.addCommand(F("x"), disableDrive, NULL);
+	ESerial.addCommand(F("stat"), readStatus, NULL);
+	ESerial.addCommand(F("para"), readParams, NULL);
+	ESerial.addCommand(F("save"), saveData, NULL);
+	ESerial.addCommand(F("load"), loadData, NULL);
 	ESerial.addCommand(F("ee"), readEEAddresses, NULL);
+	ESerial.addCommand(F("task"), readTaskTimes, NULL);
+	ESerial.addCommand(F("mem"), memory, NULL);
 
 
+	ESerial.addCommand(F("rbos"), FuelTweaker::status, &boss);
+	ESerial.addCommand(F("pbos"), FuelTweaker::reportParams, &boss);
+	ESerial.addCommand(F("Sbos"), FuelTweaker::save, &boss);
+	
+	ESerial.addCommand(F("Wolt"), Parameter::write, &(boss.o2_lower_thresh));
+	ESerial.addCommand(F("Wout"), Parameter::write, &(boss.o2_upper_thresh));
+	ESerial.addCommand(F("Wowi"), Parameter::write, &(boss.time_warming_o2_thresh));
+	ESerial.addCommand(F("Wlsl"), Parameter::write, &(boss.local_sum_limit));
+	ESerial.addCommand(F("Wtsz"), Parameter::write, &(boss.step_size));
+	ESerial.addCommand(F("Wewi"), Parameter::write, &(boss.time_eng_warm_thresh));
+	
+	
 	ESerial.addCommand(F("Winj"), Map::write, &inj_map);	// write a new injector map from what I send you next
 	ESerial.addCommand(F("rinj"), Map::read, &inj_map);		// report the injector map to the serial port
 	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);		// save the injector map to EEPROM
 	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM
 
 	// don't want write access to correction map.  Optimizer handles this.
-	ESerial.addCommand(F("rloc"), Map::read, &correction_map);
-	ESerial.addCommand(F("Sloc"), Map::save, &correction_map);
-	ESerial.addCommand(F("lloc"), Map::load, &correction_map);
-	ESerial.addCommand(F("Cloc"), Map::clear, &correction_map);
+	ESerial.addCommand(F("rloc"), Map::read, &offset_map);
+	ESerial.addCommand(F("Sloc"), Map::save, &offset_map);
+	ESerial.addCommand(F("lloc"), Map::load, &offset_map);
+	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);
 	// don't want manual + or - control over correction map.  Optimizer handles this
+
+	ESerial.addCommand(F("rchg"), Map::read, &change_map);
+	ESerial.addCommand(F("Cchg"), Map::clear, &change_map);
 
 	ESerial.addCommand(F("Wglo"), Parameter::write, &global_offset);
 	ESerial.addCommand(F("rglo"), Parameter::read, &global_offset);
@@ -373,21 +420,21 @@ void calcInjDuration()
 		inj_duration = cranking_dur.value + choke_offset;
 		return;
 	}
-	if (areWeCoasting(rpm, air_flow))
+	if (run_condition == COASTING)
 	{
 		inj_duration = 0;
 		return;
 	}
 	
 	// find nominal
-	new_inj_duration = inj_map.interpolate(rpm, air_flow, &correction_map); 
+	new_inj_duration = inj_map.interpolate(rpm, air_flow, &offset_map); 
 	
 	// adjust for stuff
 	accel_offset = adjustForAccel(air_flow);		// these should not be order dependent.  
 	choke_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
 	air_temp_offset = adjustForAirTemp(new_inj_duration, air_temp);
 
-	new_inj_duration = new_inj_duration + accel_offset + choke_offset + air_temp_offset;
+	new_inj_duration = new_inj_duration + accel_offset + choke_offset + air_temp_offset + global_offset.value;
 
 	// output that shit
 	inj_duration = new_inj_duration;
@@ -403,7 +450,7 @@ int adjustForColdEngine(unsigned int nominal_duration, int coolant_temp)
 	// takes a threshold temp and a rate (mx +b) for linear dependence on  coolant temperature
 	unsigned long adjustment;
 	
-	if (coolant_temp >= cold_threshold.value)		// is engine already warm? 
+	if (run_condition & _BV(WARM))		// is engine already warm? 
 		return 0;
 
 	adjustment = choke_scale.interpolate(coolant_temp);
@@ -415,9 +462,33 @@ int adjustForAirTemp(int nominal_duration, int air_temp)
 {
 	return 0;
 }
-char areWeCoasting(unsigned int rpm, unsigned char air_flow)
+
+void tweakFuel()
 {
-	return (!digitalRead(idl_full_pin) && (air_flow < 80) && (rpm > 1200) );
+	boss.tweak();
+}
+void updateRunCondition()
+{
+	char idl_or_full = !digitalRead(idl_full_pin);
+	run_condition = 0;
+
+	if (rpm < RUNNING_RPM)	
+		run_condition |= _BV(NOT_RUNNING);
+
+	else if (digitalRead(cranking_pin))
+		run_condition |= _BV(CRANKING);
+
+	else if (idl_or_full && (air_flow < 80) && (rpm > 1200))
+		run_condition |= _BV(COASTING);
+
+	else if (idl_or_full && (air_flow < 80) && (rpm < 1000))
+		run_condition |= _BV(IDLING);
+
+	else if (idl_or_full && (air_flow > 80))
+		run_condition |= _BV(WIDE_OPEN);
+
+	if (coolant_temp >= cold_threshold.value)
+		run_condition |= _BV(WARM);
 }
 void updateInjectors()
 {

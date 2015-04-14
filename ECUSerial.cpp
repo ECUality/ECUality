@@ -58,11 +58,9 @@ void ECUSerial::executeCommand()
 
 char ECUSerial::addCommand(const __FlashStringHelper* new_command_str_F, const char(*function_ptr)(void*), void* object)
 {
-	char new_command_str[N_CMD_CHARS];
-	Ftochar(new_command_str_F, new_command_str, N_CMD_CHARS);
+	Ftochar(new_command_str_F, command_str[n_commands], N_CMD_CHARS);
 	fun_ptr[n_commands] = function_ptr;
 	obj_ptr[n_commands] = object;
-	copyArray(new_command_str, command_str[n_commands], N_CMD_CHARS);
 	n_commands++;
 }
 

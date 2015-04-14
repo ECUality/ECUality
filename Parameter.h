@@ -5,7 +5,7 @@
 class Parameter
 {
 public:
-	Parameter(int minimum, int maximum);
+	Parameter(char* name_, int minimum, int maximum);
 	~Parameter();
 
 	static const char write(void* obj_ptr);
@@ -23,5 +23,6 @@ private:
 	int max_;
 	int min_;
 	unsigned int ee_address;
+	char* name;
 };
 

@@ -41,8 +41,6 @@ const char Map::write(void* obj_ptr)
 	self->n = new_n;
 	copyArray(new_z, self->z, new_n*new_n);
 
-	ESerial.dumpLine();		// dump any additional characters. 
-
 	read(obj_ptr);
 	return 1;
 }

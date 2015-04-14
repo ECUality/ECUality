@@ -86,6 +86,7 @@
     <ClInclude Include="ECUSerial.h" />
     <ClInclude Include="EEIndex.h" />
     <ClInclude Include="EEPROMAnything.h" />
+    <ClInclude Include="FuelTweaker.h" />
     <ClInclude Include="Interpolation.h" />
     <ClInclude Include="Map.h" />
     <ClInclude Include="Parameter.h" />
@@ -95,6 +96,7 @@
   <ItemGroup>
     <ClCompile Include="ECUSerial.cpp" />
     <ClCompile Include="EEIndex.cpp" />
+    <ClCompile Include="FuelTweaker.cpp" />
     <ClCompile Include="Map.cpp" />
     <ClCompile Include="Parameter.cpp" />
     <ClCompile Include="Scale.cpp" />
