@@ -89,6 +89,7 @@
     <ClInclude Include="FuelTweaker.h" />
     <ClInclude Include="Interpolation.h" />
     <ClInclude Include="Map.h" />
+    <ClInclude Include="MovingAverage.h" />
     <ClInclude Include="Parameter.h" />
     <ClInclude Include="Scale.h" />
     <ClInclude Include="Visual Micro\.ECUality.vsarduino.h" />
@@ -98,6 +99,7 @@
     <ClCompile Include="EEIndex.cpp" />
     <ClCompile Include="FuelTweaker.cpp" />
     <ClCompile Include="Map.cpp" />
+    <ClCompile Include="MovingAverage.cpp" />
     <ClCompile Include="Parameter.cpp" />
     <ClCompile Include="Scale.cpp" />
   </ItemGroup>

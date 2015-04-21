@@ -11,11 +11,11 @@ Wirp 1300
 Wath 90
 Wacc 20
 Wcld 150
-Wcra 1350
+Wcra 1650
 
 Wcho 5
-temp	150	100	50	10	-20
-choke	5	200	600	800	1000
+temp	150	110	60	10	-20
+choke	0	160	400	650	1000
 
 
 Wtem 12
@@ -36,11 +36,18 @@ Winj 8
 	2473	2161	1900	1744	1484	1166	988	925
 	2473	2160	1899	1789	1537	1301	1185	1129
 
+
 ## O2 lower thresh	/  o2 upper thresh	/  O2 warming time 
 ## local sum limit	/  tweak size		/  engine warming time
-Wolt 350
+
 Wout 570
-Wowi 40
-Wlsl 64
-Wtsz 8
-Wewi 1200
+Wolt 350
+Wtsz 4
+Wlsl 40
+Wrph 50
+Wibs 50
+
+Wowi 20
+Wewi 120
+Weri 120
+Wiaf 45

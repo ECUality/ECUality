@@ -14,4 +14,5 @@
 #define WIDE_OPEN	4
 #define WARM		5
 
-#define TWEAK_FREQ_MS 250
+#define TWEAK_FREQ_MS 200
+#define TWEAKS_PER_SEC 5

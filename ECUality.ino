@@ -11,6 +11,7 @@
 #include "EEPROMAnything.h"
 #include "ECUPins.h"
 #include "FuelTweaker.h"
+#include "MovingAverage.h"
 
 
 // operating control variables
@@ -28,6 +29,7 @@ unsigned char n_tasks;
 // sensor input variables
 int air_flow, rpm, o2, air_temp, coolant_temp, oil_pressure;
 unsigned int tach_period, inj_duration;
+MovingAverage avg_rpm(4);
 
 // variables that capture dynamic aspects of sensor input
 int air_flow_d, air_flow_snap, o2_d;
@@ -51,7 +53,7 @@ Scale air_rpm_scale (0, 255, 200, 6000, 8);	// the x and y gridlines (air-flow a
 Map inj_map (&air_rpm_scale, 8, 400, 3000);	// the 2d map defining injector durations with respect to air-flow and rpm
 Map offset_map (&air_rpm_scale, 8, -1500, 1500); // local modifications to the inj_map, applied by the optimizer. 
 Map change_map (&air_rpm_scale, 8, -1500, 1500);	// map that contains the changes made since power-up. 
-FuelTweaker boss(run_condition, air_flow, rpm, o2, global_offset.value, offset_map, change_map);
+FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2, global_offset.value, offset_map, change_map);
 
 
  //////////////////// pogram ///////////////////
@@ -105,6 +107,7 @@ void setup()
 	TCCR3B = _BV(CS31) | _BV(CS30);		// start the timer at clk/64 prescale. 
 
 	TIMSK3 |= _BV(OCIE3A);				// enable output compare A interrupt on timer 3
+	TIMSK3 |= _BV(TOIE3);
 
 	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
 	//TIMSK0 &= 0x00;					
@@ -117,6 +120,7 @@ void setup()
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
 
 	attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+	enableDrive(NULL);
 }
 void setPinModes(const uint8_t pins[], const uint8_t direction)
 {
@@ -134,8 +138,6 @@ void loop()
 {
 	ESerial.executeCommand();
 }
-
-
 
 
 // Serial functions
@@ -177,8 +179,8 @@ const char reportStatus(void* obj_ptr)
 {
 	Serial.print(F("air: "));
 	Serial.print(air_flow);
-	Serial.print(F("  rpm: "));
-	Serial.print(rpm);
+	Serial.print(F("  avg_rpm: "));
+	Serial.print(avg_rpm.average);
 	Serial.print(F("  inj: "));
 	Serial.print(inj_duration);
 	Serial.print(F("  O2: "));
@@ -187,8 +189,8 @@ const char reportStatus(void* obj_ptr)
 	Serial.print(coolant_temp);
 	Serial.print(F("  glo_offset: "));
 	Serial.print(global_offset.value);
-	Serial.print("  ");
-	reportMode(NULL);
+	Serial.print("  bossmode: ");
+	Serial.println(boss.mode);
 }
 const char reportMode(void* obj_ptr)
 {
@@ -313,6 +315,10 @@ void initProtocol()
 	ESerial.addCommand(F("Wlsl"), Parameter::write, &(boss.local_sum_limit));
 	ESerial.addCommand(F("Wtsz"), Parameter::write, &(boss.step_size));
 	ESerial.addCommand(F("Wewi"), Parameter::write, &(boss.time_eng_warm_thresh));
+	ESerial.addCommand(F("Wrph"), Parameter::write, &(boss.rpm_hyst));
+	ESerial.addCommand(F("Weri"), Parameter::write, &(boss.time_running_thresh));
+	ESerial.addCommand(F("Wibs"), Parameter::write, &(boss.idle_backstep));
+	ESerial.addCommand(F("Wiaf"), Parameter::write, &(boss.idle_adjust_freq));
 	
 	ESerial.addCommand(F("Wcrp"), Parameter::write, &coasting_rpm);
 
@@ -442,6 +448,7 @@ void calcRPM()
 	// pulses/min * (1 rev/pulse)				= 15e6 / tach_period 
 	// we're pulsing the injectors (and measuring) every other tach input pulse, so it's 1:1 with crankshaft. 
 	rpm = 15000000 / tach_period;
+	avg_rpm.addSample(rpm);
 }
 
 // Pulse duration business
@@ -452,7 +459,8 @@ void calcInjDuration()
 
 	if (digitalRead(cranking_pin))
 	{
-		choke_offset = adjustForColdEngine(cranking_dur.value, coolant_temp);
+		choke_offset = adjustForColdEngine(cranking_dur.value, coolant_temp) >> 1;	
+		//choke_offset >>= 1;									// halve this for cranking. 
 		inj_duration = cranking_dur.value + choke_offset;
 		return;
 	}
@@ -631,4 +639,8 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 	// set all injectors low (in same instruction)
 	PORTL &= ~0xAA;			// 0b01010101; 
 	PORTA &= ~0x08;				// 
+}
+ISR(TIMER3_OVF_vect)
+{
+	tach_period = 0xFFFF;	// this makes it obvious the engine is not running
 }
