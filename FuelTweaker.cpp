@@ -187,7 +187,7 @@ void FuelTweaker::tweak()
 	{
 		time_eng_warm = 0;
 		time_warming_o2 = 0;
-		//Serial.print(F(";"));
+		//ESerial.print(F(";"));
 	}
 	if (run_condition & _BV(COASTING))
 		time_warming_o2 = 0;
@@ -233,55 +233,55 @@ void FuelTweaker::tweak()
 const char FuelTweaker::status(void* obj_ptr)
 {
 	FuelTweaker* self = (FuelTweaker *)obj_ptr;
-	Serial.print(F("locked: "));
-	Serial.print(self->lockout);
-	Serial.print(F("   mode: "));
-	Serial.print(self->mode);
-	//Serial.print(F("  o2open:"));
-	//Serial.print(o2_open);
-	Serial.print(F("   time_waiting: "));
-	Serial.println(self->time_waiting);
-	Serial.print(F("time_warming_o2: "));
-	Serial.print(self->time_warming_o2);
-	Serial.print(F("   time_eng_warm: "));
-	Serial.print(self->time_eng_warm);
-	Serial.print(F("   local_sum: "));
-	Serial.println(self->local_sum);
+	ESerial.print(F("locked: "));
+	ESerial.print(self->lockout);
+	ESerial.print(F("   mode: "));
+	ESerial.print(self->mode);
+	//ESerial.print(F("  o2open:"));
+	//ESerial.print(o2_open);
+	ESerial.print(F("   time_waiting: "));
+	ESerial.println(self->time_waiting);
+	ESerial.print(F("time_warming_o2: "));
+	ESerial.print(self->time_warming_o2);
+	ESerial.print(F("   time_eng_warm: "));
+	ESerial.print(self->time_eng_warm);
+	ESerial.print(F("   local_sum: "));
+	ESerial.println(self->local_sum);
 }
 
 const char FuelTweaker::reportParams(void* obj_ptr)
 {
 	FuelTweaker* self = (FuelTweaker *)obj_ptr;
 	
-	Serial.print(F("o2_upper_thr: "));
-	Serial.print(self->o2_upper_thresh.value);
+	ESerial.print(F("o2_upper_thr: "));
+	ESerial.print(self->o2_upper_thresh.value);
 
-	Serial.print(F("   o2_lower_thr: "));
-	Serial.print(self->o2_lower_thresh.value);
+	ESerial.print(F("   o2_lower_thr: "));
+	ESerial.print(self->o2_lower_thresh.value);
 
-	Serial.print(F("   step: "));
-	Serial.print(self->step_size.value);
+	ESerial.print(F("   step: "));
+	ESerial.print(self->step_size.value);
 
-	Serial.print(F("   local_sum_limit: "));
-	Serial.print(self->local_sum_limit.value);
+	ESerial.print(F("   local_sum_limit: "));
+	ESerial.print(self->local_sum_limit.value);
 
-	Serial.print(F("   rpm_hyst: "));
-	Serial.print(self->rpm_hyst.value);
+	ESerial.print(F("   rpm_hyst: "));
+	ESerial.print(self->rpm_hyst.value);
 
-	Serial.print(F("   idle_backstep: "));
-	Serial.println(self->idle_backstep.value);
+	ESerial.print(F("   idle_backstep: "));
+	ESerial.println(self->idle_backstep.value);
 
-	Serial.print(F("time thresholds->  warming_o2: "));
-	Serial.print(self->time_warming_o2_thresh.value);
+	ESerial.print(F("time thresholds->  warming_o2: "));
+	ESerial.print(self->time_warming_o2_thresh.value);
 
-	Serial.print(F("   warm: "));
-	Serial.print(self->time_eng_warm_thresh.value);
+	ESerial.print(F("   warm: "));
+	ESerial.print(self->time_eng_warm_thresh.value);
 
-	Serial.print(F("   running: "));
-	Serial.print(self->time_running_thresh.value);
+	ESerial.print(F("   running: "));
+	ESerial.print(self->time_running_thresh.value);
 
-	Serial.print(F("   idle_adjust_freq: "));
-	Serial.println(self->idle_adjust_freq.value);
+	ESerial.print(F("   idle_adjust_freq: "));
+	ESerial.println(self->idle_adjust_freq.value);
 
 
 }
@@ -320,7 +320,7 @@ const char FuelTweaker::save(void* obj_ptr)
 	Parameter::save(&self->idle_backstep);
 	Parameter::save(&self->idle_adjust_freq);
 
-	Serial.print(F("saved Tweaker."));
+	ESerial.print(F("saved Tweaker."));
 }
 
 const char FuelTweaker::lock(void* obj_ptr)
@@ -328,7 +328,7 @@ const char FuelTweaker::lock(void* obj_ptr)
 	FuelTweaker* self = (FuelTweaker *)obj_ptr;
 	self->lockout = !self->lockout;
 	if (self->lockout)
-		Serial.println(F("tweaks locked"));
+		ESerial.println(F("tweaks locked"));
 	else
-		Serial.println(F("tweaks unlocked"));
+		ESerial.println(F("tweaks unlocked"));
 }

@@ -1,5 +1,5 @@
 #include "EEIndex.h"
-#include "HardwareSerial.h"
+#include "ECUSerial.h"
 
 
 EEIndex::EEIndex()
@@ -24,12 +24,12 @@ const unsigned int EEIndex::getNewAddress(const unsigned int size)
 
 	if (n_addresses >= MAX_EE_ADDRESSES)			// check that our array is not full 
 	{
-		Serial.println(F("too many EE addresses"));
+		ESerial.println(F("too many EE addresses"));
 		return 0;
 	}
 	if ((addresses[n_addresses] + size) >= EE_AVAILABLE)	// check that we still have EE space
 	{
-		Serial.println(F("Overflowed EE space"));
+		ESerial.println(F("Overflowed EE space"));
 		return 0;
 	}
 	n_addresses++;

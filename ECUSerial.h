@@ -13,6 +13,7 @@ class ECUSerial
 	// These listed functions are static member functions, which lets them be called this way.  
 	// For example, to call "write" on the Map map1, the static member fuction "write" belonging to "Map" class
 	// is called and passed a pointer to map1.  
+	HardwareSerial& HSerial;
 
 	const char (*fun_ptr[N_COMMANDS_MAX])(void *);	// the function pointers (2 bytes each)
 	void* obj_ptr[N_COMMANDS_MAX];					// the object pointers that are passed to the above functions. (2 bytes)
@@ -37,30 +38,30 @@ public:
 	void reportArray(const char str[], T data[], unsigned int n)
 	{
 		int i;
-		Serial.print(str);
-		Serial.print("\t");
+		HSerial.print(str);
+		HSerial.print("\t");
 		for (i = 0; i < n; ++i)
 		{
-			Serial.print(data[i]);
-			Serial.print("\t");
+			HSerial.print(data[i]);
+			HSerial.print("\t");
 		}
-		Serial.println();
+		HSerial.println();
 	}
 
 	template <typename T>
 	char receiveNumberBetween(T *var, const int lower, const int upper, const char var_name[])
 	{
-		unsigned int new_value = Serial.parseInt();
+		unsigned int new_value = HSerial.parseInt();
 		if (new_value > upper)
 		{
-			Serial.print(F("too many "));
-			Serial.println(var_name);
+			HSerial.print(F("too many "));
+			HSerial.println(var_name);
 			return 0;
 		}
 		if (new_value < lower)
 		{
-			Serial.print(F("too few"));
-			Serial.println(var_name);
+			HSerial.print(F("too few"));
+			HSerial.println(var_name);
 			return 0;
 		}
 		*var = new_value;
@@ -72,7 +73,31 @@ public:
 	char readNLetters(char c[], unsigned int n);
 
 	void dumpLine(void);
+
+	template<typename T>
+	size_t print(T input)
+	{
+		HSerial.print(input);
+		//Serial.print(input);
+	}
+
+	template<typename T>
+	size_t println(T input)
+	{
+		HSerial.println(input);
+		//Serial.println(input);
+	}
+
+	size_t println(void)
+	{
+		HSerial.println();
+		//Serial.println();
+	}
 	
+	void begin(unsigned long baud)
+	{
+		HSerial.begin(baud);
+	}
 };
 
 extern ECUSerial ESerial;

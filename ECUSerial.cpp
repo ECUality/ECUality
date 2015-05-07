@@ -15,7 +15,8 @@ void Ftochar(const __FlashStringHelper *ifsh, char* c, uint8_t n)
 	}
 }
 
-ECUSerial::ECUSerial() 
+ECUSerial::ECUSerial() :
+HSerial(Serial3)
 {
 	n_commands = 0;
 }
@@ -29,10 +30,10 @@ void ECUSerial::executeCommand()
 	char i;
 	char c[N_CMD_CHARS] = "";
 	
-	if (!Serial.available())
+	if (!HSerial.available())
 		return;
 
-	// passes up any non-letters in the Serial buffer.  Waits 20ms for each. 
+	// passes up any non-letters in the HSerial buffer.  Waits 20ms for each. 
 	if (dumpNonLetters() == -1)		// if only non-letters are showing up, fuggadaboutit. 
 		return;
 
@@ -47,12 +48,13 @@ void ECUSerial::executeCommand()
 		{
 			// call attached function on the attached object. 
 			(*fun_ptr[i])(obj_ptr[i]);
+			//dumpNonLetters();
 			return;
 		}
 	}
 	// if we didn't interpret a valid command, ignore the rest until we see '\n'
-	Serial.print(F("no comprendo: "));		// if we don't return by now, there was no match. 
-	Serial.println(c);
+	HSerial.print(F("no comprendo: "));		// if we don't return by now, there was no match. 
+	HSerial.println(c);
 	dumpLine();
 }
 
@@ -67,18 +69,18 @@ char ECUSerial::addCommand(const __FlashStringHelper* new_command_str_F, const c
 int ECUSerial::timedPeek(unsigned int timeout )
 {
 	unsigned long time = millis();
-	while (Serial.peek() == -1)
+	while (HSerial.peek() == -1)
 	{
 		if ((millis() - time) > timeout)
 			break;
 	}
-	return Serial.peek();
+	return HSerial.peek();
 }
 
 char ECUSerial::timedParseInt(int &value, unsigned char timeout)
 {
 	unsigned int time = millis();
-	value = Serial.parseInt();
+	value = HSerial.parseInt();
 	time = millis() - time;
 	if (time > timeout)
 		return 0;
@@ -89,14 +91,14 @@ char ECUSerial::timedReceiveArray(int new_array[], const unsigned int n_array, c
 {	// parses sequential integers from serial into new_array.  Returns 0 if any integer takes longer than 50 ms.
 	unsigned int i;
 
-	Serial.setTimeout(SERIAL_TIMEOUT);	// set the timeout to receive each number to 50ms
+	HSerial.setTimeout(SERIAL_TIMEOUT);	// set the timeout to receive each number to 50ms
 
 	for (i = 0; i < n_array; ++i)
 	{
 		if (!timedParseInt(new_array[i]))
 		{
-			Serial.print(F("timed out while reading "));
-			Serial.println(str);
+			HSerial.print(F("timed out while reading "));
+			HSerial.println(str);
 			return 0;
 		}
 
@@ -106,13 +108,13 @@ char ECUSerial::timedReceiveArray(int new_array[], const unsigned int n_array, c
 
 char ECUSerial::dumpNonLetters()
 {
-	char c = Serial.peek();
+	char c = HSerial.peek();	// don't need to time this because we know there is at least one from available() check. 
 	while (!(  ((c >= 'a') && (c <= 'z'))  ||  ((c >= 'A') && (c <= 'Z'))  ||  ((c >= '*') && (c <= '/'))  ))  // c not a letter or +-*/.,./;'
 	{
-		Serial.read();			// advance the buffer
+		HSerial.read();			// advance the buffer
 		c = timedPeek();		// waits (default of) 20ms for a character to show up. returns -1 on timeout.
 	}
-	return c;
+	return c;		// will be a -1 if there are no letters.  If there is a letter, it will be the first letter encountered. 
 }
 
 char ECUSerial::readNLetters(char c[], unsigned int n)
@@ -121,16 +123,16 @@ char ECUSerial::readNLetters(char c[], unsigned int n)
 	for (i = 0; i < n; i++)
 	{
 		c[i] = timedPeek();
-		if (!(((c[i] >= 'a') && (c[i] <= 'z')) || ((c[i] >= 'A') && (c[i] <= 'Z')) || ((c[i] >= '*') && (c[i] <= '/'))))	// if c[i] not a letter nor /*-+.
+		HSerial.read();		// advance the buffer. 
+		if (!(((c[i] >= 'a') && (c[i] <= 'z')) || ((c[i] >= 'A') && (c[i] <= 'Z'))))	// if c[i] not a letter nor /*-+.
 			break;
-		Serial.read();		// advance the buffer. 
 	}
 }
 
 void ECUSerial::dumpLine()
 {
 	char str[5];
-	while (Serial.readBytesUntil('\n', str, 4));
+	while (HSerial.readBytesUntil('\n', str, 4));
 }
 
 ECUSerial ESerial;

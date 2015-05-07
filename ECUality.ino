@@ -16,7 +16,7 @@
 
 // operating control variables
 char good_ee_loads;
-char auto_stat;
+uint8_t auto_stat;
 unsigned char run_condition;
 
 // task variables
@@ -59,7 +59,8 @@ FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2, global_offse
  //////////////////// pogram ///////////////////
 void setup()
 {
-	Serial.begin(115200);
+	ESerial.begin(9600);
+	//Serial.begin(115200);
 
 	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
 	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
@@ -136,11 +137,26 @@ void setPinModes(const uint8_t pins[], const uint8_t direction)
 
 void loop()
 {
-	ESerial.executeCommand();
+	/*if (Serial.available())
+		Serial3.write(Serial.read());
+	if (Serial3.available())
+		Serial.write(Serial3.read());*/
+	if (auto_stat == 2)
+	{
+		auto_stat = 1;
+		reportStatus(NULL);
+	}
+
+	if (Serial3.available())
+	{
+		ESerial.executeCommand();
+		Serial3.print(auto_stat);
+	}
+	
 }
 
 
-// Serial functions
+// ESerial functions
 const char saveData(void* obj_ptr)
 {
 	Parameter::save(&coasting_rpm);
@@ -161,6 +177,7 @@ const char loadData(void* obj_ptr)
 	good &= Parameter::load(&air_thresh);
 	good &= Parameter::load(&cold_threshold);
 	good &= Parameter::load(&cranking_dur);
+	good &= Parameter::load(&global_offset);
 	good &= Scale::load(&choke_scale);
 	good &= Scale::load(&temp_scale);
 	good &= Scale::load(&air_rpm_scale);
@@ -169,48 +186,48 @@ const char loadData(void* obj_ptr)
 	good &= FuelTweaker::load(&boss);
 
 	if (!good)
-		Serial.println(F("not all data loaded"));
+		ESerial.println(F("not all data loaded"));
 	else
-		Serial.println(F("all data loaded"));
+		ESerial.println(F("all data loaded"));
 	return good;
 }
 
 const char reportStatus(void* obj_ptr)
 {
-	Serial.print(F("air: "));
-	Serial.print(air_flow);
-	Serial.print(F("  avg_rpm: "));
-	Serial.print(avg_rpm.average);
-	Serial.print(F("  inj: "));
-	Serial.print(inj_duration);
-	Serial.print(F("  O2: "));
-	Serial.print(o2);
-	Serial.print(F("  temp: "));
-	Serial.print(coolant_temp);
-	Serial.print(F("  glo_offset: "));
-	Serial.print(global_offset.value);
-	Serial.print("  bossmode: ");
-	Serial.println(boss.mode);
+	ESerial.print(F("air: "));
+	ESerial.print(air_flow);
+	ESerial.print(F("  avg_rpm: "));
+	ESerial.print(avg_rpm.average);
+	ESerial.print(F("  inj: "));
+	ESerial.print(inj_duration);
+	ESerial.print(F("  O2: "));
+	ESerial.print(o2);
+	ESerial.print(F("  temp: "));
+	ESerial.print(coolant_temp);
+	ESerial.print(F("  glo_offset: "));
+	ESerial.print(global_offset.value);
+	ESerial.print("  bossmode: ");
+	ESerial.println(boss.mode);
 }
 const char reportMode(void* obj_ptr)
 {
 	if (run_condition & _BV(NOT_RUNNING))
-		Serial.print(F("not running,  "));
+		ESerial.print(F("not running,  "));
 	else if (run_condition & _BV(CRANKING))
-		Serial.print(F("cranking,  "));
+		ESerial.print(F("cranking,  "));
 	else if (run_condition & _BV(COASTING))
-		Serial.print(F("coasting,  "));
+		ESerial.print(F("coasting,  "));
 	else if (run_condition & _BV(IDLING))
-		Serial.print(F("idling,  "));
+		ESerial.print(F("idling,  "));
 	else if (run_condition & _BV(WIDE_OPEN))
-		Serial.print(F("hopefully hauling ass,  "));
+		ESerial.print(F("hopefully hauling ass,  "));
 	else
-		Serial.print(F("pulling,  "));
+		ESerial.print(F("pulling,  "));
 
 	if (run_condition & _BV(WARM))
-		Serial.println(F("warm"));
+		ESerial.println(F("warm"));
 	else
-		Serial.println(F("cold"));
+		ESerial.println(F("cold"));
 }
 const char reportParams(void* obj_ptr)
 {
@@ -230,23 +247,29 @@ const char reportTaskTimes(void* obj_ptr)
 }
 const char toggleAutoStatus(void* obj_ptr)
 {
-	auto_stat = !auto_stat;
+	if (!auto_stat)
+		auto_stat = 1;
+	else
+		auto_stat = 0;
+	return 0;
+	//auto_stat = 0x01 & !auto_stat;
 }
 void autoReport()
 {
-	if (auto_stat)
-		reportStatus(NULL);
+	if (auto_stat == 1)
+		auto_stat = 2;
+	return;
 }
 
 const char increaseGlobal(void* obj_ptr)
 {
-	global_offset.value += getGain();
-	Serial.print(".");
+	global_offset.value += 10;
+	ESerial.print("+");
 }
 const char decreaseGlobal(void* obj_ptr)
 {
-	global_offset.value -= getGain();
-	Serial.print(".");
+	global_offset.value -= 10;
+	ESerial.print("-");
 }
 const char enableDrive(void* obj_ptr)
 {
@@ -255,17 +278,17 @@ const char enableDrive(void* obj_ptr)
 		digitalWrite(fuel_pin, HIGH);
 		digitalWrite(drv_en_pin, LOW);
 		//attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
-		Serial.println(F("Armed."));
+		ESerial.println(F("Armed."));
 	}
 	else
-		Serial.println(F("bad EE data, no go."));
+		ESerial.println(F("bad EE data, no go."));
 }
 const char disableDrive(void* obj_ptr)
 {
 	digitalWrite(fuel_pin, LOW);
 	digitalWrite(drv_en_pin, HIGH);		// this turns off the injectors and ignition
 	//detachInterrupt(4);
-	Serial.println(F("inj, fuel disabled."));
+	ESerial.println(F("inj, fuel disabled."));
 }
 const char memory(void* obj_ptr)
 {
@@ -273,19 +296,11 @@ const char memory(void* obj_ptr)
 	int free_ram, v;
 	free_ram = (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 
-	Serial.print(F("Free ram: "));
-	Serial.println(free_ram);
+	ESerial.print(F("Free ram: "));
+	ESerial.println(free_ram);
+	return 0;
 }
 
-
-int getGain()		// this is just the number of characters before the newline '\n' character times a constant (16)
-{
-	int gain = 1; 
-	char c[10];
-	gain += Serial.readBytesUntil('\n', &c[1], 9);
-	gain <<= 4;		// multiply by 16
-	return gain;
-}
 
 void initProtocol()
 {

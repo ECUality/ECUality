@@ -26,13 +26,13 @@ const char Parameter::write(void* obj_ptr)		// Note: this uses parseInt(), so it
 
 	if (!good)
 	{
-		Serial.println(F("not received"));
+		ESerial.println(F("not received"));
 		return 0;
 	}
 
 	if (!self->verify(new_value))
 	{
-		Serial.println(F("Out of bounds"));
+		ESerial.println(F("Out of bounds"));
 		return 0;
 	}
 
@@ -52,7 +52,7 @@ const char Parameter::load(void* obj_ptr)
 	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println(F("no EE address for Parameter"));
+		ESerial.println(F("no EE address for Parameter"));
 		return 0;
 	}
 
@@ -60,7 +60,7 @@ const char Parameter::load(void* obj_ptr)
 
 	if (!self->verify(new_value))
 	{
-		Serial.println(F("Invalid parameter - not loaded"));
+		ESerial.println(F("Invalid parameter - not loaded"));
 		return 0;
 	}
 
@@ -72,9 +72,10 @@ const char Parameter::load(void* obj_ptr)
 const char Parameter::read(void* obj_ptr)
 {
 	Parameter* self = (Parameter *)obj_ptr;
-	Serial.print(self->name);
-	Serial.print(": ");
-	Serial.println(self->value);
+	ESerial.print(self->name);
+	ESerial.print(": ");
+	ESerial.println(self->value);
+	return 0;
 }
 
 const char Parameter::save(void* obj_ptr)
@@ -85,13 +86,13 @@ const char Parameter::save(void* obj_ptr)
 	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println(F("no EE address for Parameter"));
+		ESerial.println(F("no EE address for Parameter"));
 		return 0;
 	}
 
 	address += EEPROM_writeAnything(address, self->value);
 
-	Serial.print(F("."));
+	ESerial.print(F("."));
 }
 
 const char Parameter::clear(void* obj_ptr)

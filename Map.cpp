@@ -35,7 +35,7 @@ const char Map::write(void* obj_ptr)
 
 	if (!self->verify(new_z, new_n))
 	{
-		Serial.println(F("Invalid map - not loaded"));
+		ESerial.println(F("Invalid map - not loaded"));
 		return 0;
 	}
 	self->n = new_n;
@@ -55,7 +55,7 @@ const char Map::load(void* obj_ptr)
 	address = self->ee_start_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println(F("no EE address for Map"));
+		ESerial.println(F("no EE address for Map"));
 		return 0;
 	}
 
@@ -64,7 +64,7 @@ const char Map::load(void* obj_ptr)
 
 	if (!self->verify(new_z, new_n))
 	{
-		Serial.println(F("Invalid map - not loaded"));
+		ESerial.println(F("Invalid map - not loaded"));
 		return 0;
 	}
 
@@ -80,12 +80,12 @@ const char Map::read(void* obj_ptr)
 	int i;
 	ESerial.reportArray("air_gridline:\n", self->scale->x, self->n);
 	ESerial.reportArray("rpm_gridline:\n", self->scale->y, self->n);
-	Serial.println(F("map:"));
+	ESerial.println(F("map:"));
 	for (i = 0; i < self->n; ++i)
 	{
 		ESerial.reportArray(" ", &self->z[self->n*i], self->n);
 	}
-	Serial.print("\n");
+	ESerial.print("\n");
 }
 
 const char Map::save(void* obj_ptr)
@@ -96,14 +96,14 @@ const char Map::save(void* obj_ptr)
 	address = self->ee_start_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		Serial.println(F("no EE address for Map"));
+		ESerial.println(F("no EE address for Map"));
 		return 0;
 	}
 
 	address += EEPROM_writeAnything(address, self->n);
 	address += EEPROM_writeAnything(address, self->z);
 
-	Serial.println(F("saved map to EE"));
+	ESerial.println(F("saved map to EE"));
 }
 
 const char Map::clear(void * obj_ptr)
@@ -129,10 +129,10 @@ const int Map::interpolate(unsigned int rpm, unsigned char air, const Map* corre
 	// check if both i's are -1 (key was higher than all array elements)
 	// check if any of them are 0 (key was lower than lowest element)
 	// handle those cases
-	//Serial.print("r");
-	//Serial.print(i_rpm);
-	//Serial.print("a");
-	//Serial.println(i_air);
+	//ESerial.print("r");
+	//ESerial.print(i_rpm);
+	//ESerial.print("a");
+	//ESerial.println(i_air);
 
 	if (i_air > 0)
 	{
@@ -262,7 +262,7 @@ void Map::offsetZPoint(char i_rpm, char i_air, int offset)
 {
 	if ((i_rpm >= n) || (i_rpm < 0) || (i_air >= n) || (i_air < 0))
 	{
-		Serial.println(F("index out of bounds"));
+		ESerial.println(F("index out of bounds"));
 		return;
 	}
 	z[n*i_rpm + i_air] += offset;
