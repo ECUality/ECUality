@@ -36,6 +36,7 @@ void ECUSerial::executeCommand()
 	// passes up any non-letters in the HSerial buffer.  Waits 20ms for each. 
 	if (dumpNonLetters() == -1)		// if only non-letters are showing up, fuggadaboutit. 
 		return;
+	
 
 	// reads at most 4 letters into string c.  The first non-letter encountered stops the reading. 
 	// that first non-letter remains in the buffer.  Only the letters are eaten.  
@@ -113,6 +114,8 @@ char ECUSerial::dumpNonLetters()
 	{
 		HSerial.read();			// advance the buffer
 		c = timedPeek();		// waits (default of) 20ms for a character to show up. returns -1 on timeout.
+		if (c == -1)			// if there are no more characters, step out of the loop. 
+			break;
 	}
 	return c;		// will be a -1 if there are no letters.  If there is a letter, it will be the first letter encountered. 
 }

@@ -78,20 +78,17 @@ public:
 	size_t print(T input)
 	{
 		HSerial.print(input);
-		//Serial.print(input);
 	}
 
 	template<typename T>
 	size_t println(T input)
 	{
 		HSerial.println(input);
-		//Serial.println(input);
 	}
 
 	size_t println(void)
 	{
 		HSerial.println();
-		//Serial.println();
 	}
 	
 	void begin(unsigned long baud)

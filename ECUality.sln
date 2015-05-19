@@ -5,6 +5,8 @@ VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ECUality", "ECUality.vcxproj", "{8CAA4D41-B883-498B-8419-DFF36F8E5400}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ECUalityDash", "ECUalityDash\ECUalityDash.vcxproj", "{9C42F86D-8D31-46E5-B8E9-753CBC1FEDC8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -15,6 +17,10 @@ Global
 		{8CAA4D41-B883-498B-8419-DFF36F8E5400}.Debug|Win32.Build.0 = Debug|Win32
 		{8CAA4D41-B883-498B-8419-DFF36F8E5400}.Release|Win32.ActiveCfg = Release|Win32
 		{8CAA4D41-B883-498B-8419-DFF36F8E5400}.Release|Win32.Build.0 = Release|Win32
+		{9C42F86D-8D31-46E5-B8E9-753CBC1FEDC8}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9C42F86D-8D31-46E5-B8E9-753CBC1FEDC8}.Debug|Win32.Build.0 = Debug|Win32
+		{9C42F86D-8D31-46E5-B8E9-753CBC1FEDC8}.Release|Win32.ActiveCfg = Release|Win32
+		{9C42F86D-8D31-46E5-B8E9-753CBC1FEDC8}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

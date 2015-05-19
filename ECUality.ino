@@ -122,6 +122,7 @@ void setup()
 
 	attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
 	enableDrive(NULL);
+	auto_stat = 1; // turn on auto-reporting. 
 }
 void setPinModes(const uint8_t pins[], const uint8_t direction)
 {
@@ -137,22 +138,14 @@ void setPinModes(const uint8_t pins[], const uint8_t direction)
 
 void loop()
 {
-	/*if (Serial.available())
-		Serial3.write(Serial.read());
-	if (Serial3.available())
-		Serial.write(Serial3.read());*/
 	if (auto_stat == 2)
 	{
 		auto_stat = 1;
-		reportStatus(NULL);
+		ESerial.print(F("Oil: "));
+		ESerial.println(oil_pressure);
 	}
 
-	if (Serial3.available())
-	{
-		ESerial.executeCommand();
-		Serial3.print(auto_stat);
-	}
-	
+	ESerial.executeCommand();	
 }
 
 
@@ -194,6 +187,7 @@ const char loadData(void* obj_ptr)
 
 const char reportStatus(void* obj_ptr)
 {
+
 	ESerial.print(F("air: "));
 	ESerial.print(air_flow);
 	ESerial.print(F("  avg_rpm: "));
@@ -208,6 +202,7 @@ const char reportStatus(void* obj_ptr)
 	ESerial.print(global_offset.value);
 	ESerial.print("  bossmode: ");
 	ESerial.println(boss.mode);
+	
 }
 const char reportMode(void* obj_ptr)
 {
@@ -244,6 +239,10 @@ const char reportEEAddresses(void* obj_ptr)
 const char reportTaskTimes(void* obj_ptr)
 {
 	ESerial.reportArray("Task runtimes in us: ", task_runtime, n_tasks);
+}
+const char reportFault()
+{
+	
 }
 const char toggleAutoStatus(void* obj_ptr)
 {
@@ -414,11 +413,17 @@ void initProtocol()
 // Sensor reading functions
 void readAirFlow()
 {
-	toggle(13);
+	static unsigned int n_air_faults = 0;
 
 	air_flow_d = -air_flow;
 	air_flow = analogRead(air_flow_pin) >> 2;	// takes 100us.  Should shorten
 	air_flow_d += air_flow;
+
+	if (air_flow_d > 20)
+	{
+		ESerial.print(F("air fault #: "));
+		ESerial.println(n_air_faults);
+	}
 
 	air_flow_snap += air_flow_d;
 
@@ -429,7 +434,7 @@ void readAirFlow()
 		else
 			air_flow_snap = 0;
 	}
-
+	
 
 }
 void readO2Sensor()
@@ -458,12 +463,20 @@ void readOilPressure()
 }
 void calcRPM()
 {
+	static unsigned int n_rpm_faults = 0;
+
 	// (60e6 us/min) / (4 us/tic)				= 15e6 tics/min
 	// (tics/min) / (tach_period tics/pulse)	= pulses/min
 	// pulses/min * (1 rev/pulse)				= 15e6 / tach_period 
 	// we're pulsing the injectors (and measuring) every other tach input pulse, so it's 1:1 with crankshaft. 
 	rpm = 15000000 / tach_period;
 	avg_rpm.addSample(rpm);
+
+	if (abs(rpm - avg_rpm.average) > 1000)
+	{
+		ESerial.print(F("RPM fault #: "));
+		ESerial.println(n_rpm_faults);
+	}
 }
 
 // Pulse duration business
