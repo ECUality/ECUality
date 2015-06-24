@@ -32,6 +32,8 @@ class FuelTweaker
 	const int& avg_rpm; 
 	int& global_offset;
 
+	int& idle_dur; 
+
 	Map& offset_map;
 	Map& change_map; 
 
@@ -64,7 +66,7 @@ public:
 
 
 	FuelTweaker(const unsigned char& run_condition, const int& air_flow, const int& rpm, const int& avg_rpm, 
-		const int& o2, int& global_correction, Map& offset_map, Map& change_map);
+		const int& o2, int& global_correction, int& idle_dur, Map& offset_map, Map& change_map);
 	~FuelTweaker();
 	void tweak();
 	static const char status(void* obj_ptr);

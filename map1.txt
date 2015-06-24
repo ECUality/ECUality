@@ -6,16 +6,17 @@
 # cranking duration nominal 
 # choke scale (extra injector duration vs coolant temperature) 
 
-Wcrp 1600
-Wirp 1300
+Wcrp 1500
+Wirp 1400
 Wath 90
 Wacc 20
-Wcld 150
+Wcld 175
 Wcra 1650
+Widl 680
 
 Wcho 5
-temp	150	110	60	10	-20
-choke	0	160	400	650	1000
+temp	180	120	60	10	-20
+choke	0	160	480	650	1000
 
 
 Wtem 12
@@ -44,12 +45,12 @@ Wout 570
 Wolt 350
 Wtsz 4
 Wlsl 40
-Wrph 50
-Wibs 50
+Wrph 60
+Wibs 45
 
 Wowi 20
 Wewi 120
-Weri 120
+Weri 180
 Wiaf 45
 
 Sbos

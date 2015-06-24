@@ -6,7 +6,8 @@ const uint8_t air_temp_pin = A14;
 const uint8_t o2_pin = A9;
 const uint8_t coolant_temp_pin = A13;
 const uint8_t oil_pressure_pin = A11;
-const uint8_t tach_pin = 19;
+const uint8_t tach_pin = 18;
+const uint8_t tach_interrupt = 5;		// see "attachinterrupt" page on Arduino.cc
 const uint8_t idl_full_pin = A10;
 const uint8_t cranking_pin = 10;
 

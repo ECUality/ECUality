@@ -16,7 +16,7 @@ void Ftochar(const __FlashStringHelper *ifsh, char* c, uint8_t n)
 }
 
 ECUSerial::ECUSerial() :
-HSerial(Serial3)
+HSerial(Serial)
 {
 	n_commands = 0;
 }

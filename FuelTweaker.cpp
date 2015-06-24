@@ -5,7 +5,7 @@
 
 
 FuelTweaker::FuelTweaker(const unsigned char& run_condition_, const int& air_flow_, const int& rpm_, const int& avg_rpm_,
-	const int& o2_, int& global_offset_, Map& offset_map_, Map& change_map_) :
+	const int& o2_, int& global_offset_, int& idle_dur_, Map& offset_map_, Map& change_map_) :
 	o2_upper_thresh("", 300, 1000),			// Param: 
 	o2_lower_thresh("", 0, 700),			// Param: 
 	time_warming_o2_thresh("", 3, 90),		// Param: seconds after coasting before O2 tweaks resume
@@ -23,6 +23,7 @@ FuelTweaker::FuelTweaker(const unsigned char& run_condition_, const int& air_flo
 	run_condition(run_condition_), o2(o2_),					// extermal references
 	air_flow(air_flow_), rpm(rpm_), avg_rpm(avg_rpm_),		// external refs. 
 	global_offset(global_offset_),							// external refs. 
+	idle_dur(idle_dur_),
 	offset_map(offset_map_), change_map(change_map_),		// maps
 	ee_addy(EE_index.getNewAddress(50))
 {
@@ -57,18 +58,19 @@ FuelTweaker::~FuelTweaker()
 
 void FuelTweaker::tweakvRPM()
 {
-	time_waiting++;
-
-	if (mode != IDLE_ADJ_MODE )
+	// this is the overall tweaking mode.  Can be 0 (not tweaking), LOCAL_MODE, GLOBAL_MODE, IDLE_ADJ_MODE, IDLE_WAIT_MODE
+	// it is only set to IDLE_ADJ_MODE or IDLE_WAIT_MODE inside this function.  
+	if (mode != IDLE_ADJ_MODE )		
 	{
 		// if we just came down to idle from pulling or coasting, add 4 secs to timer. 
 		// so we don't happen to start adjusting while the rpm is still settling down. 
 		if (mode != IDLE_WAIT_MODE)				
 			time_waiting -= (4 * TWEAKS_PER_SEC);	
 
-		mode = IDLE_WAIT_MODE;					// record that we're now waiting. 
-		global_offset -= idle_adjustment;		// reverse any changes from interrupted previous adjustments. 
-		idle_adjustment = 0;					// and zero out the tracker to reflect this reversal.
+		mode = IDLE_WAIT_MODE;				// record that we're now waiting. 
+		time_waiting++;
+		global_offset -= idle_adjustment;		// reverse changes from any interrupted previous adjustments. *IDLE or GLOBAL*
+		idle_adjustment = 0;				// and zero out the tracker to reflect this reversal.
 
 		// check if it's time to adjust. 
 		if (time_waiting < (idle_adjust_freq.value * TWEAKS_PER_SEC))	// it's not time yet. 
@@ -87,8 +89,14 @@ void FuelTweaker::tweakvRPM()
 	{
 		mode = IDLE_WAIT_MODE;				// say we're now waiting.
 		time_waiting = 0;					// reset the waiting timer.
+
+		// the following 1 line is from when I played with a single-value idle tune. (needed scale for stability)
+		//idle_dur += idle_backstep.value;	// set the screw back a 1/4 turn. *IDLE or GLOBAL*
+
+		// the following 2 lines are from when we were doing local/global distribution of changes.
 		global_offset -= idle_adjustment;	// set global back then re-distribute adjustment to local and global. 
 		apportionLocalGlobal(idle_adjustment + idle_backstep.value);
+
 		idle_adjustment = 0;			// zero out the adjustment tracker (since we completed without interruption) 
 	}
 	else if (avg_rpm > rpm_old)			// if rpm goes up, compare to the new, higher rpm.  
