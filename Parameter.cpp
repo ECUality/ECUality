@@ -52,7 +52,7 @@ const char Parameter::load(void* obj_ptr)
 	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		ESerial.println(F("no EE address for Parameter"));
+		ESerial.println(F("no EE adr 4 Param"));
 		return 0;
 	}
 
@@ -86,13 +86,15 @@ const char Parameter::save(void* obj_ptr)
 	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		ESerial.println(F("no EE address for Parameter"));
+		ESerial.println(F("no EE adr Parameter"));
 		return 0;
 	}
 
 	address += EEPROM_writeAnything(address, self->value);
 
-	ESerial.print(F("."));
+	ESerial.print(F("!"));
+	ESerial.print(self->name);
+	ESerial.println(F(" saved"));
 }
 
 const char Parameter::clear(void* obj_ptr)

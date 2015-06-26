@@ -2,8 +2,9 @@
 #include "HardwareSerial.h"
 
 #define SERIAL_TIMEOUT 50
-#define N_COMMANDS_MAX 99
+#define N_COMMANDS_MAX 150
 #define N_CMD_CHARS 5		// so we can use 4 characters
+#define DUP_OUTPUT
 
 class ECUSerial
 {
@@ -77,24 +78,37 @@ public:
 	template<typename T>
 	size_t print(T input)
 	{
-		HSerial.print(input);
+#ifdef DUP_OUTPUT
+			Serial.print(input);
+#endif
+		return HSerial.print(input);
 	}
 
 	template<typename T>
 	size_t println(T input)
 	{
-		HSerial.println(input);
+#ifdef DUP_OUTPUT
+		Serial.println(input);
+#endif
+		return HSerial.println(input);
 	}
 
 	size_t println(void)
 	{
-		HSerial.println();
+#ifdef DUP_OUTPUT
+			Serial.println();
+#endif
+		return HSerial.println();
 	}
 	
 	void begin(unsigned long baud)
 	{
+#ifdef DUP_OUTPUT
+		Serial.begin(baud);
+#endif
 		HSerial.begin(baud);
 	}
+
 };
 
 extern ECUSerial ESerial;

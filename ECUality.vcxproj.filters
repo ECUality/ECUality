@@ -57,6 +57,12 @@
     <ClInclude Include="MovingAverage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ECUProtocol.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Globals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Map.cpp">
