@@ -4,7 +4,7 @@
 #define SERIAL_TIMEOUT 50
 #define N_COMMANDS_MAX 150
 #define N_CMD_CHARS 5		// so we can use 4 characters
-#define DUP_OUTPUT
+//#define DUP_OUTPUT
 
 class ECUSerial
 {
@@ -14,7 +14,8 @@ class ECUSerial
 	// These listed functions are static member functions, which lets them be called this way.  
 	// For example, to call "write" on the Map map1, the static member fuction "write" belonging to "Map" class
 	// is called and passed a pointer to map1.  
-	HardwareSerial& HSerial;
+	HardwareSerial* HSerial;
+	HardwareSerial* DefaultSerial;
 
 	const char (*fun_ptr[N_COMMANDS_MAX])(void *);	// the function pointers (2 bytes each)
 	void* obj_ptr[N_COMMANDS_MAX];					// the object pointers that are passed to the above functions. (2 bytes)
@@ -39,30 +40,30 @@ public:
 	void reportArray(const char str[], T data[], unsigned int n)
 	{
 		int i;
-		HSerial.print(str);
-		HSerial.print("\t");
+		HSerial->print(str);
+		HSerial->print("\t");
 		for (i = 0; i < n; ++i)
 		{
-			HSerial.print(data[i]);
-			HSerial.print("\t");
+			HSerial->print(data[i]);
+			HSerial->print("\t");
 		}
-		HSerial.println();
+		HSerial->println();
 	}
 
 	template <typename T>
 	char receiveNumberBetween(T *var, const int lower, const int upper, const char var_name[])
 	{
-		unsigned int new_value = HSerial.parseInt();
+		unsigned int new_value = HSerial->parseInt();
 		if (new_value > upper)
 		{
-			HSerial.print(F("too many "));
-			HSerial.println(var_name);
+			HSerial->print(F("too many "));
+			HSerial->println(var_name);
 			return 0;
 		}
 		if (new_value < lower)
 		{
-			HSerial.print(F("too few"));
-			HSerial.println(var_name);
+			HSerial->print(F("too few"));
+			HSerial->println(var_name);
 			return 0;
 		}
 		*var = new_value;
@@ -81,7 +82,7 @@ public:
 #ifdef DUP_OUTPUT
 			Serial.print(input);
 #endif
-		return HSerial.print(input);
+		return HSerial->print(input);
 	}
 
 	template<typename T>
@@ -90,7 +91,7 @@ public:
 #ifdef DUP_OUTPUT
 		Serial.println(input);
 #endif
-		return HSerial.println(input);
+		return HSerial->println(input);
 	}
 
 	size_t println(void)
@@ -98,15 +99,13 @@ public:
 #ifdef DUP_OUTPUT
 			Serial.println();
 #endif
-		return HSerial.println();
+		return HSerial->println();
 	}
 	
 	void begin(unsigned long baud)
 	{
-#ifdef DUP_OUTPUT
 		Serial.begin(baud);
-#endif
-		HSerial.begin(baud);
+		Serial3.begin(baud);
 	}
 
 };

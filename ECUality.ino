@@ -103,8 +103,6 @@ void loop()
 	{
 		auto_stat = 1;
 		reportStatus(NULL);
-		//ESerial.print(F("Oil: "));
-		//ESerial.println(oil_pressure);
 	}
 
 	ESerial.executeCommand();	
