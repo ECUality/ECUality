@@ -3,13 +3,21 @@
 #include "EEPROMAnything.h"
 #include "EEIndex.h"
 
-Parameter::Parameter(char* name_, int minimum, int maximum)
+Parameter::Parameter(const char * name_, const char handle_[4], int minimum, int maximum)
 {
-	min_ = minimum;
-	max_ = maximum;
-	value = 0;
 	name = name_;
+	handle = handle_;
+
+	min = minimum;
+	max = maximum;
+	value = 0;
+
 	ee_address = getEEAddy(4);
+
+	// params[] is an array of pointers to Parameter objects.  Here we add a new pointer to the list.
+	params[n_params] = this;		
+	n_params++;					// now we advance the number of objects.
+
 }
 
 Parameter::~Parameter()
@@ -52,7 +60,8 @@ const char Parameter::load(void* obj_ptr)
 	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		ESerial.println(F("no EE adr 4 Param"));
+		ESerial.print(F("no EE adress for "));
+		ESerial.println(self->name);
 		return 0;
 	}
 
@@ -60,7 +69,8 @@ const char Parameter::load(void* obj_ptr)
 
 	if (!self->verify(new_value))
 	{
-		ESerial.println(F("Invalid parameter - not loaded"));
+		ESerial.print(self->name);
+		ESerial.println(F(" not loaded"));
 		return 0;
 	}
 
@@ -72,6 +82,9 @@ const char Parameter::load(void* obj_ptr)
 const char Parameter::read(void* obj_ptr)
 {
 	Parameter* self = (Parameter *)obj_ptr;
+	ESerial.print("W");
+	ESerial.print(self->handle);
+	ESerial.print(" ");
 	ESerial.print(self->name);
 	ESerial.print(": ");
 	ESerial.println(self->value);
@@ -100,10 +113,10 @@ const char Parameter::save(void* obj_ptr)
 const char Parameter::clear(void* obj_ptr)
 {
 	Parameter* self = (Parameter *)obj_ptr;
-	if (self->min_ < 0)
+	if (self->min < 0)
 		self->value = 0;
 	else
-		self->value = self->min_;
+		self->value = self->min;
 }
 
 const unsigned int Parameter::getEEAddy(unsigned int size)
@@ -115,5 +128,8 @@ const unsigned int Parameter::getEEAddy(unsigned int size)
 
 const bool Parameter::verify(const int new_value)
 {
-	return ((new_value >= min_) && (new_value <= max_));
+	return ((new_value >= min) && (new_value <= max));
 }
+
+Parameter* Parameter::params[] = {};
+unsigned char Parameter::n_params = 0;

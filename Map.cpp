@@ -7,8 +7,11 @@
 #include "Arrays.h"
 
 
-Map::Map(const Scale* scale_p, unsigned char size, int z_lower_, int z_upper_)
+Map::Map(const char* name_, const char handle_[4], const Scale* scale_p, unsigned char size, int z_lower_, int z_upper_)
 {
+	name = name_;
+	handle = handle_;
+
 	scale = scale_p;
 	n = size;
 	z_upper = z_upper_;

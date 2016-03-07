@@ -4,36 +4,46 @@
 
 
 
-FuelTweaker::FuelTweaker(const unsigned char& run_condition_, const int& air_flow_, const int& rpm_, const int& avg_rpm_,
-	const int& o2_, int& global_offset_, int& idle_dur_, Map& offset_map_, Map& change_map_) :
-	o2_upper_thresh("", 300, 1000),			// Param: 
-	o2_lower_thresh("", 0, 700),			// Param: 
-	time_warming_o2_thresh("", 3, 90),		// Param: seconds after coasting before O2 tweaks resume
-	step_size("", 0, 100),					// Param: 
-	local_sum_limit("", 10, 300),			// Param: 
-	time_eng_warm_thresh("", 30, 600),		// Param: seconds engine has to be warm before local tweaks start. 
-	rpm_hyst("", 5, 150),					// Param: how sensitive the rpm optimizer is.  Smaller # = more sensitive. 
-	time_running_thresh("", 30, 600),		// Param: seconds engine has to be running before any O2 tweaks start.
-	idle_backstep("", 20, 500),				// Param: how far back we turn the idle enrichment screw after we see rpm fall. 
-	idle_adjust_freq("", 5, 600),			// Param:  seconds between idle adjustments
+FuelTweaker::FuelTweaker(
+	const unsigned char& run_condition_, 
+	const int& air_flow_, 
+	const int& rpm_, 
+	const int& avg_rpm_,
+	const int& o2_, int& global_offset_, 
+	Map& offset_map_, Map& change_map_) :
 
-	lockout(0), mode(0), o2_open(0), idle_adjustment(0),			// internal chars
-	time_warming_o2(0), time_eng_warm(0), rpm_old(0),		// internal ints
-	time_waiting(0),
 	run_condition(run_condition_), o2(o2_),					// extermal references
 	air_flow(air_flow_), rpm(rpm_), avg_rpm(avg_rpm_),		// external refs. 
 	global_offset(global_offset_),							// external refs. 
-	idle_dur(idle_dur_),
 	offset_map(offset_map_), change_map(change_map_),		// maps
+
+	lockout(0), mode(0), o2_open(0), idle_adjustment(0),	// internal chars
+	time_warming_o2(0), time_eng_warm(0), rpm_old(0),		// internal ints
+	time_waiting(0),
+
+	o2_upper_thresh("", "out", 300, 1000),			// Internal Parameters
+	o2_lower_thresh("", "olt", 0, 700),
+	step_size("", "tsz", 0, 100),
+	local_sum_limit("", "lsl", 10, 300),
+	rpm_hyst("", "rph", 5, 150),					
+	idle_backstep("", "ibs", 20, 500),
+
+	idle_adjust_freq("", "iaf", 5, 600),
+	time_warming_o2_thresh("", "owi", 3, 90),
+	time_eng_warm_thresh("", "ewi", 30, 600),
+	time_running_thresh("", "eri", 30, 600),
+	
 	ee_addy(EE_index.getNewAddress(50))
 {
-	o2_upper_thresh.value = 550;		// the o2 value above which we begin to trim leaner. 
-	o2_lower_thresh.value = 370;		// the o2 value below which we begin to trim richer. 
+	/* This commented because these values initialized from EEPRPOM */
+	
+	o2_upper_thresh.value = 550;		
+	o2_lower_thresh.value = 370;
 
 	//  the size of tweak steps 
 	step_size.value = 0;		// start with it zeroed, so there is no tweaking until loaded from EE. 
 
-	local_sum_limit.value = 40;			// the limit to the sum of the local offset map (governs local vs global changes) 
+	local_sum_limit.value = 40;		// the limit to the sum of the local offset map (governs local vs global changes) 
 	rpm_hyst.value = 50;
 	idle_backstep.value = 50;
 
@@ -89,9 +99,6 @@ void FuelTweaker::tweakvRPM()
 	{
 		mode = IDLE_WAIT_MODE;				// say we're now waiting.
 		time_waiting = 0;					// reset the waiting timer.
-
-		// the following 1 line is from when I played with a single-value idle tune. (needed scale for stability)
-		//idle_dur += idle_backstep.value;	// set the screw back a 1/4 turn. *IDLE or GLOBAL*
 
 		// the following 2 lines are from when we were doing local/global distribution of changes.
 		global_offset -= idle_adjustment;	// set global back then re-distribute adjustment to local and global. 
@@ -218,10 +225,10 @@ void FuelTweaker::tweak()
 	}
 
 	// if we're idling, tweak to maximize RPM
-	
-	if (run_condition & _BV(IDLING))
+	if (run_condition & _BV(IDLING))	
 	{
-		tweakvRPM();
+		//tweakvRPM();	// XXX Turning this OFF  3-5-2016
+		mode = 0;		// indicate to other processes that we're not tweaking
 		return;
 	}
 	
@@ -292,43 +299,6 @@ const char FuelTweaker::reportParams(void* obj_ptr)
 	ESerial.println(self->idle_adjust_freq.value);
 
 
-}
-
-const char FuelTweaker::load(void*obj_ptr)
-{
-	FuelTweaker* self = (FuelTweaker *)obj_ptr;
-	char good = 1;
-
-	good &= Parameter::load(&self->o2_lower_thresh);
-	good &= Parameter::load(&self->o2_upper_thresh);
-	good &= Parameter::load(&self->time_warming_o2_thresh);
-	good &= Parameter::load(&self->step_size);
-	good &= Parameter::load(&self->local_sum_limit);
-	good &= Parameter::load(&self->time_eng_warm_thresh);
-	good &= Parameter::load(&self->rpm_hyst);
-	good &= Parameter::load(&self->time_running_thresh);
-	good &= Parameter::load(&self->idle_backstep);
-	good &= Parameter::load(&self->idle_adjust_freq);
-
-	return good; 
-}
-
-const char FuelTweaker::save(void* obj_ptr)
-{
-	FuelTweaker* self = (FuelTweaker *)obj_ptr;
-	
-	Parameter::save(&self->o2_lower_thresh);
-	Parameter::save(&self->o2_upper_thresh);
-	Parameter::save(&self->time_warming_o2_thresh);
-	Parameter::save(&self->step_size);
-	Parameter::save(&self->local_sum_limit);
-	Parameter::save(&self->time_eng_warm_thresh);
-	Parameter::save(&self->rpm_hyst);
-	Parameter::save(&self->time_running_thresh);
-	Parameter::save(&self->idle_backstep);
-	Parameter::save(&self->idle_adjust_freq);
-
-	ESerial.print(F("saved Tweaker."));
 }
 
 const char FuelTweaker::lock(void* obj_ptr)

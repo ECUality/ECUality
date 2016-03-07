@@ -27,7 +27,7 @@ void setup()
 	// 1: Injector duration timing (highest)
 	// 2: Tasks that happen periodically (middle)
 	// 3: Responses to the user (lowest)
-
+	//
 	// The following "task" array contains the periods of the level-2 events. 
 	// Execution of these events can be interrupted by a level-1 event. 
 	// These events will interrupt execution of a level-3 event. 
@@ -219,13 +219,12 @@ void calcInjDuration()
 		return;
 	}
 
-	/*
 	if (run_condition & _BV(IDLING))
 	{
-		inj_duration = idle_dur.value + ((idle_slope.value * (1000 - avg_rpm.average)) >> 10); 
+		// inj_duration = idle_dur.value + ((idle_slope.value * (1000 - avg_rpm.average)) >> 10); 
+		inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
 		return; 
 	}
-	*/
 
 	if (run_condition & _BV(COASTING))
 	{
