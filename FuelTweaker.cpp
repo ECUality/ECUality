@@ -10,7 +10,7 @@ FuelTweaker::FuelTweaker(const unsigned char& run_condition_, const int& air_flo
 	o2_lower_thresh("", 0, 700),			// Param: 
 	time_warming_o2_thresh("", 3, 90),		// Param: seconds after coasting before O2 tweaks resume
 	step_size("", 0, 100),					// Param: 
-	local_sum_limit("", 10, 300),			// Param: 
+	local_sum_limit("", 10, 2000),			// Param: 
 	time_eng_warm_thresh("", 30, 600),		// Param: seconds engine has to be warm before local tweaks start. 
 	rpm_hyst("", 5, 150),					// Param: how sensitive the rpm optimizer is.  Smaller # = more sensitive. 
 	time_running_thresh("", 30, 600),		// Param: seconds engine has to be running before any O2 tweaks start.

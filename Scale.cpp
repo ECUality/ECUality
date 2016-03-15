@@ -30,11 +30,21 @@ const char Scale::write(void* obj_ptr)
 	int new_n, new_x[SCALE_SIZE_MAX], new_y[SCALE_SIZE_MAX];
 
 	good &= ESerial.timedParseInt(new_n);
+
+	if (new_n > SCALE_SIZE_MAX)
+	{
+		ESerial.println(F("array overflow"));
+		return 0;
+	}
+
 	good &= ESerial.timedReceiveArray(new_x, new_n, "x gridline");
 	good &= ESerial.timedReceiveArray(new_y, new_n, "y gridline");
 
 	if (!good)
+	{ 
+		ESerial.println(F("invalid scale"));
 		return 0;
+	}
 
 	self->n = new_n;
 	copyArray(new_x, self->x, new_n);

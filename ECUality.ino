@@ -268,17 +268,19 @@ void updateRunCondition()
 	char idl_or_full = !digitalRead(idl_full_pin);
 	run_condition = 0;
 
-	if (rpm < RUNNING_RPM)	
+	if ((rpm < RUNNING_RPM) || !digitalRead(fuel_pin))
 		run_condition |= _BV(NOT_RUNNING);
 
 	else if (digitalRead(cranking_pin))
 		run_condition |= _BV(CRANKING);
 
-	else if (idl_or_full && (air_flow < air_thresh.value) && (rpm > coasting_rpm.value))
-		run_condition |= _BV(COASTING);
-
-	else if (idl_or_full && (air_flow < air_thresh.value) && (rpm < idling_rpm.value))
-		run_condition |= _BV(IDLING);
+	else if (air_flow < coasting_air.interpolate(rpm))
+	{
+		if (rpm > coasting_rpm.value)
+			run_condition |= _BV(COASTING);
+		else
+			run_condition |= _BV(IDLING);
+	}
 
 	else if (idl_or_full && (air_flow > air_thresh.value))
 		run_condition |= _BV(WIDE_OPEN);
@@ -293,7 +295,7 @@ void updateInjectors()
 	else
 		OCR3A = 10;					// if inj_duration = 0, we just drop it. 
 
-	// if we just set jumped the compare register below the timer, should stop the injector 
+	// if we just set the compare register below the timer, we need to close the injector 
 	// because if we don't the timer will have to wrap all the way around before it stops. 
 	if (inj_duration <= TCNT3)		
 	{

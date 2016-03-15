@@ -51,5 +51,7 @@ Map offset_map(&air_rpm_scale, 8, -1500, 1500); // local modifications to the in
 Map change_map(&air_rpm_scale, 8, -1500, 1500);	// map that contains the changes made since power-up. 
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2, global_offset.value, idle_dur.value, offset_map, change_map);
 Parameter idle_slope("idle_slope", 200, 4000);	// a slope that determines how fast the injector duration increases with decreasing rpm at idle.
+Scale coasting_air(200, 6000, 0, 255);			// a line that determines when we're coasting (and shoud shut off injectors)
+
 
 
