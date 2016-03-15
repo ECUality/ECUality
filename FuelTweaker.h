@@ -52,11 +52,9 @@ public:
 	Parameter	o2_lower_thresh;		// the o2 value below which we begin to trim richer. 
 	Parameter	step_size;				// the size of single adjustments made during tuning
 	Parameter	local_sum_limit;		// limit on adjustment to the local map in one direction before altering global offset
-	Parameter	rpm_hyst;				// how sensitive the rpm optimizer is.  Smaller # = more sensitive. 
-	Parameter	idle_backstep;			// how far back we turn the idle enrichment screw after we see rpm fall. 
+
 		
 	// times in seconds
-	Parameter	idle_adjust_freq;		// seconds between idle adjustments
 	Parameter	time_warming_o2_thresh;	// seconds after coasting before O2 tweaks resume
 	Parameter	time_eng_warm_thresh;	// seconds engine has to be warm before local tweaks start. 
 	Parameter	time_running_thresh;	// seconds engine has to be running before any O2 tweaks start.

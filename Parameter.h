@@ -13,7 +13,6 @@ public:
 	static const char load(void* obj_ptr);
 	static const char save(void* obj_ptr);
 	static const char clear(void* obj_ptr);
-
 	void setName(const __FlashStringHelper* name_);
 
 	static Parameter* params[40];		// an array of pointers to Parameter objects

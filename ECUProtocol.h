@@ -253,18 +253,18 @@ void initProtocol()
 	ESerial.addCommand(F("arm"), enableDrive, NULL);
 	ESerial.addCommand(F("auto"), setReportMode, NULL);
 	ESerial.addCommand(F("lock"), FuelTweaker::lock, &boss);
-	ESerial.addCommand(F("mode"), reportMode, NULL);
+	ESerial.addCommand(F("mode"), reportMode, NULL);			// 5
 
 	ESerial.addCommand(F("+"), increaseGlobal, NULL);
 	ESerial.addCommand(F("-"), decreaseGlobal, NULL);
 	ESerial.addCommand(F("stat"), reportStatus, NULL);
 	ESerial.addCommand(F("para"), reportParams, NULL);
-	ESerial.addCommand(F("save"), saveData, NULL);
+	ESerial.addCommand(F("save"), saveData, NULL);				// 10
 
 	ESerial.addCommand(F("load"), loadData, NULL);
 	ESerial.addCommand(F("ee"), reportEEAddresses, NULL);
 	ESerial.addCommand(F("task"), reportTaskTimes, NULL);
-	ESerial.addCommand(F("mem"), memory, NULL);		//14
+	ESerial.addCommand(F("mem"), memory, NULL);					//14
 
 	ESerial.addCommand(F("rbos"), FuelTweaker::status, &boss);
 	ESerial.addCommand(F("pbos"), FuelTweaker::reportParams, &boss);	// 16
@@ -274,107 +274,14 @@ void initProtocol()
 	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);		// save the injector map to EEPROM
 	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM - 20
 
-	// don't want write access to correction map.  Optimizer handles this.
+	ESerial.addCommand(F("Wloc"), Map::write, &offset_map);
 	ESerial.addCommand(F("rloc"), Map::read, &offset_map);
 	ESerial.addCommand(F("Sloc"), Map::save, &offset_map);
 	ESerial.addCommand(F("lloc"), Map::load, &offset_map);
-	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);		// - 24
-	// don't want manual + or - control over correction map.  Optimizer handles this
+	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);		// - 25
 
 	ESerial.addCommand(F("rchg"), Map::read, &change_map);
 	ESerial.addCommand(F("Cchg"), Map::clear, &change_map);
-	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 27
+	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 28
 
-	
-	// Here we register Read, Write and Save commands for every Parameter and Scale.
-	/*
-	for ( i = 0; i < Parameter::n_params; i++)
-	{
-		param = Parameter::params[i];
-
-		cmd[1] = param->handle[0];
-		cmd[2] = param->handle[1];
-		cmd[3] = param->handle[2];
-		cmd[0] = 'W';
-		ESerial.addCommand(cmd, Parameter::write, param);
-		cmd[0] = 'r';
-		ESerial.addCommand(cmd, Parameter::read, param);
-		cmd[0] = 'S';
-		ESerial.addCommand(cmd, Parameter::save, param);
-	}
-
-	for (i = 0; i < Scale::n_scales; i++)
-	{
-		scale = Scale::scales[i];
-
-		cmd[1] = scale->handle[0];
-		cmd[2] = scale->handle[1];
-		cmd[3] = scale->handle[2];
-		cmd[0] = 'W';
-		ESerial.addCommand(cmd, Scale::write, scale);
-		cmd[0] = 'r';
-		ESerial.addCommand(cmd, Scale::read, scale);
-		cmd[0] = 'S';
-		ESerial.addCommand(cmd, Scale::save, scale);
-	} */
-
-	/*
-	ESerial.addCommand(F("Wolt"), Parameter::write, &(boss.o2_lower_thresh));
-	ESerial.addCommand(F("Wout"), Parameter::write, &(boss.o2_upper_thresh));
-	ESerial.addCommand(F("Wowi"), Parameter::write, &(boss.time_warming_o2_thresh));
-	ESerial.addCommand(F("Wlsl"), Parameter::write, &(boss.local_sum_limit));
-	ESerial.addCommand(F("Wtsz"), Parameter::write, &(boss.step_size));
-	ESerial.addCommand(F("Wewi"), Parameter::write, &(boss.time_eng_warm_thresh));
-	ESerial.addCommand(F("Wrph"), Parameter::write, &(boss.rpm_hyst));
-	ESerial.addCommand(F("Weri"), Parameter::write, &(boss.time_running_thresh));
-	ESerial.addCommand(F("Wibs"), Parameter::write, &(boss.idle_backstep));
-	ESerial.addCommand(F("Wiaf"), Parameter::write, &(boss.idle_adjust_freq));
-	ESerial.addCommand(F("Wglo"), Parameter::write, &global_offset);
-	ESerial.addCommand(F("rglo"), Parameter::read, &global_offset);
-	ESerial.addCommand(F("Sglo"), Parameter::save, &global_offset);
-
-	ESerial.addCommand(F("Wcho"), Scale::write, &choke_scale);
-	ESerial.addCommand(F("rcho"), Scale::read, &choke_scale);
-	ESerial.addCommand(F("Scho"), Scale::save, &choke_scale);
-
-	ESerial.addCommand(F("Wtem"), Scale::write, &temp_scale);
-	ESerial.addCommand(F("rtem"), Scale::read, &temp_scale);
-	ESerial.addCommand(F("Stem"), Scale::save, &temp_scale);
-
-	ESerial.addCommand(F("Wgri"), Scale::write, &air_rpm_scale);
-	ESerial.addCommand(F("rgri"), Scale::read, &air_rpm_scale);
-	ESerial.addCommand(F("Sgri"), Scale::save, &air_rpm_scale);
-
-	ESerial.addCommand(F("Wcrp"), Parameter::write, &coasting_rpm);
-	ESerial.addCommand(F("rcrp"), Parameter::read, &coasting_rpm);
-	ESerial.addCommand(F("Scrp"), Parameter::save, &coasting_rpm);
-
-	ESerial.addCommand(F("Wirp"), Parameter::write, &idling_rpm);
-	ESerial.addCommand(F("rirp"), Parameter::read, &idling_rpm);
-	ESerial.addCommand(F("Sirp"), Parameter::save, &idling_rpm);
-
-	ESerial.addCommand(F("Widl"), Parameter::write, &idle_dur);
-	ESerial.addCommand(F("ridl"), Parameter::read, &idle_dur);
-	ESerial.addCommand(F("Sidl"), Parameter::save, &idle_dur);
-
-	ESerial.addCommand(F("Wids"), Parameter::write, &idle_slope);
-	ESerial.addCommand(F("rids"), Parameter::read, &idle_slope);
-	ESerial.addCommand(F("Sids"), Parameter::save, &idle_slope);
-
-	ESerial.addCommand(F("Wath"), Parameter::write, &air_thresh);
-	ESerial.addCommand(F("rath"), Parameter::read, &air_thresh);
-	ESerial.addCommand(F("Sath"), Parameter::save, &air_thresh);
-
-	ESerial.addCommand(F("Wcld"), Parameter::write, &cold_threshold);
-	ESerial.addCommand(F("rcld"), Parameter::read, &cold_threshold);
-	ESerial.addCommand(F("Scld"), Parameter::save, &cold_threshold);
-
-	ESerial.addCommand(F("Wcra"), Parameter::write, &cranking_dur);
-	ESerial.addCommand(F("rcra"), Parameter::read, &cranking_dur);
-	ESerial.addCommand(F("Scra"), Parameter::save, &cranking_dur);
-
-	ESerial.addCommand(F("Wacc"), Parameter::write, &accel_stabilize_rate);
-	ESerial.addCommand(F("racc"), Parameter::read, &accel_stabilize_rate);
-	ESerial.addCommand(F("Sacc"), Parameter::save, &accel_stabilize_rate);
-	*/
 }

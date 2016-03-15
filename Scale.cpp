@@ -25,7 +25,6 @@ Scale::Scale(const char handle_[4], int x_lower_, int x_upper_, int y_lower_, in
 	n_scales++;					// now we advance the number of objects.
 }
 
-
 Scale::~Scale()
 {
 }
@@ -70,7 +69,8 @@ const char Scale::load(void* obj_ptr)
 	address = self->ee_address;
 	if (!address)			// address 0 is code for "not a valid address" 
 	{
-		ESerial.println(F("no EE address for Scale"));
+		ESerial.print(F("no EE address for "));
+		ESerial.println(self->name);
 		return 0;
 	}
 	
@@ -80,7 +80,8 @@ const char Scale::load(void* obj_ptr)
 
 	if (!self->verify(new_x, new_y, new_n))
 	{
-		ESerial.println(F("Invalid scale - not loaded"));
+		ESerial.print(F("Invalid value encountered loading "));
+		ESerial.println(self->name);
 		return 0;
 	}
 

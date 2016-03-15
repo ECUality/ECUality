@@ -68,8 +68,8 @@ const char Parameter::load(void* obj_ptr)
 
 	if (!self->verify(new_value))
 	{
-		ESerial.print(self->name);
-		ESerial.println(F(" not loaded"));
+		ESerial.print(F("Invalid value encountered loading "));
+		ESerial.println(self->name);
 		return 0;
 	}
 

@@ -23,11 +23,8 @@ FuelTweaker::FuelTweaker(
 	o2_upper_thresh("out", 300, 1000),			// Internal Parameters
 	o2_lower_thresh("olt", 0, 700),
 	step_size("tsz", 0, 100),
-	local_sum_limit("lsl", 10, 300),
-	rpm_hyst("rph", 5, 150),					
-	idle_backstep("ibs", 20, 500),
+	local_sum_limit("lsl", 10, 300),	
 
-	idle_adjust_freq("iaf", 5, 600),
 	time_warming_o2_thresh("owi", 3, 90),
 	time_eng_warm_thresh("ewi", 30, 600),
 	time_running_thresh("eri", 30, 600),
@@ -38,9 +35,6 @@ FuelTweaker::FuelTweaker(
 	o2_lower_thresh.setName(F("O2_lower"));
 	step_size.setName(F("O2_lower"));
 	local_sum_limit.setName(F("loc_sum_limit"));
-	rpm_hyst.setName(F("rpm_hyst"));
-	idle_backstep.setName(F("idle_backstep"));
-	idle_adjust_freq.setName(F("idle_adj_freq"));
 	time_warming_o2_thresh.setName(F("time_warming_o2"));
 	time_eng_warm_thresh.setName(F("time_eng_warm"));
 	time_running_thresh.setName(F("time_glo_only"));
@@ -54,8 +48,6 @@ FuelTweaker::FuelTweaker(
 	step_size.value = 0;		// start with it zeroed, so there is no tweaking until loaded from EE. 
 
 	local_sum_limit.value = 40;		// the limit to the sum of the local offset map (governs local vs global changes) 
-	rpm_hyst.value = 50;
-	idle_backstep.value = 50;
 
 	//  time from when engine stops coasting until it starts tweaking again.  
 	time_warming_o2_thresh.value = 20;	// (20 sec) * (1000 ms/s) / (ms/tic)
@@ -65,9 +57,6 @@ FuelTweaker::FuelTweaker(
 
 	// time from when engine starts until O2-based tweaks are allowed. 
 	time_running_thresh.value = 3 * 60;
-
-	// time between adjustments to idle fuel mixture. 
-	idle_adjust_freq.value = 45;		// seconds.
 	
 }
 
@@ -76,8 +65,8 @@ FuelTweaker::~FuelTweaker()
 {
 }
 
-void FuelTweaker::tweakvRPM()
-{
+// void FuelTweaker::tweakvRPM() 
+/* {
 	// this is the overall tweaking mode.  Can be 0 (not tweaking), LOCAL_MODE, GLOBAL_MODE, IDLE_ADJ_MODE, IDLE_WAIT_MODE
 	// it is only set to IDLE_ADJ_MODE or IDLE_WAIT_MODE inside this function.  
 	if (mode != IDLE_ADJ_MODE )		
@@ -123,7 +112,7 @@ void FuelTweaker::tweakvRPM()
 	idle_adjustment--;
 	
 		
-}
+} */
 
 void FuelTweaker::apportionLocalGlobal(int adjustment)
 {
@@ -262,8 +251,6 @@ const char FuelTweaker::status(void* obj_ptr)
 	ESerial.print(self->lockout);
 	ESerial.print(F("   mode: "));
 	ESerial.print(self->mode);
-	//ESerial.print(F("  o2open:"));
-	//ESerial.print(o2_open);
 	ESerial.print(F("   time_waiting: "));
 	ESerial.println(self->time_waiting);
 	ESerial.print(F("time_warming_o2: "));
@@ -290,11 +277,7 @@ const char FuelTweaker::reportParams(void* obj_ptr)
 	ESerial.print(F("   local_sum_limit: "));
 	ESerial.print(self->local_sum_limit.value);
 
-	ESerial.print(F("   rpm_hyst: "));
-	ESerial.print(self->rpm_hyst.value);
-
-	ESerial.print(F("   idle_backstep: "));
-	ESerial.println(self->idle_backstep.value);
+	ESerial.println();
 
 	ESerial.print(F("time thresholds->  warming_o2: "));
 	ESerial.print(self->time_warming_o2_thresh.value);
@@ -304,9 +287,6 @@ const char FuelTweaker::reportParams(void* obj_ptr)
 
 	ESerial.print(F("   running: "));
 	ESerial.print(self->time_running_thresh.value);
-
-	ESerial.print(F("   idle_adjust_freq: "));
-	ESerial.println(self->idle_adjust_freq.value);
 
 
 }

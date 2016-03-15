@@ -141,6 +141,7 @@ void readAirFlow()
 		ESerial.println(n_air_faults);
 	}
 
+	/*
 	air_flow_snap += air_flow_d;
 
 	if (air_flow_snap)
@@ -149,7 +150,7 @@ void readAirFlow()
 			air_flow_snap -= accel_stabilize_rate.value;
 		else
 			air_flow_snap = 0;
-	}
+	} */
 	
 
 }
@@ -221,7 +222,6 @@ void calcInjDuration()
 
 	if (run_condition & _BV(IDLING))
 	{
-		// inj_duration = idle_dur.value + ((idle_slope.value * (1000 - avg_rpm.average)) >> 10); 
 		inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
 		return; 
 	}

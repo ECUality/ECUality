@@ -6,26 +6,24 @@
 # cranking duration nominal 
 # choke scale (extra injector duration vs coolant temperature) 
 
+Wglo -171
 Wcrp 1500
 Wirp 1400
 Wath 90
-Wacc 20
 Wcld 175
-Wcra 1650
-Widl 680
+Wcra 1640
 
 Wcho 5
 temp	180	120	60	10	-20
-choke	0	160	600	850	1000
-
+choke	0	170	650	850	1000
 
 Wtem 12
 563	454	356	278	208	157	116	88	66	52	41	32
 32	50	68	86	104	122	140	158	176	194	212	230
 
-Wcoa 3
-rpm	500	1500	6000
-air 	50	50	80
+Wisc 2
+500	1300
+1000	600
 
 Wgri 8	
 air:	220	180	140	100	80	60	40	20	
@@ -41,6 +39,16 @@ Winj 8
 	2473	2161	1900	1744	1484	1166	988	925
 	2473	2160	1899	1789	1537	1301	1185	1129
 
+Wloc 8
+ 	10	40	11	0	0	-4	-1	0	
+ 	82	-53	-2	-247	112	-196	-197	-18	
+ 	63	120	76	-159	77	-73	-116	-24	
+ 	0	32	-89	-244	94	-119	-181	-5	
+ 	0	16	275	-79	-177	258	626	-5	
+ 	0	0	82	26	-28	294	353	0	
+ 	0	0	-1	-2	-4	105	204	1	
+ 	0	0	0	0	0	10	49	1	
+
 
 ## O2 lower thresh	/  o2 upper thresh	/  O2 warming time 
 ## local sum limit	/  tweak size		/  engine warming time
@@ -49,13 +57,11 @@ Wout 570
 Wolt 350
 Wtsz 4
 Wlsl 300
-Wrph 60
-Wibs 45
 
-Wowi 10
+Wowi 20
 Wewi 30
 Weri 30
-Wiaf 45
+Wiaf 100
 
 Sbos
 S
