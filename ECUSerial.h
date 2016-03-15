@@ -30,6 +30,8 @@ public:
 
 	char addCommand(const __FlashStringHelper* new_command_str, const char(*function_ptr)(void*), void* object);
 
+	char addCommand(const char* new_command_str, const char(*function_ptr)(void*), void* object);
+
 	int timedPeek(unsigned int timeout = 50);
 
 	char timedParseInt(int &value, unsigned char timeout = 55);

@@ -6,8 +6,11 @@
 #include "Arrays.h"
 
 
-Scale::Scale(int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p)
+Scale::Scale(const char* name_, const char handle_[4], int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p)
 {
+	name = name_;
+	handle = handle_;
+
 	n = n_p;
 	x_lower = x_lower_;
 	x_upper = x_upper_;
@@ -16,6 +19,10 @@ Scale::Scale(int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned ch
 	
 	// 100 bytes for easy reading.  Should need SCALE_SIZE_MAX * 2(bytes per int) * 2(two arrays) = 80
 	ee_address = getEEAddy(100);
+
+	// params[] is an array of pointers to Parameter objects.  Here we add a new pointer to the list.
+	scales[n_scales] = this;
+	n_scales++;					// now we advance the number of objects.
 }
 
 
@@ -106,6 +113,8 @@ const char Scale::save(void * obj_ptr)
 const char Scale::read(void* obj_ptr)
 {
 	Scale* self = (Scale *)obj_ptr;
+	ESerial.print("W");
+	ESerial.println(self->handle);
 	ESerial.reportArray("x: ", self->x, self->n);
 	ESerial.reportArray("y: ", self->y, self->n);
 	ESerial.println();
@@ -148,3 +157,6 @@ const unsigned int Scale::getEEAddy(unsigned int size)
 		size = sizeof(*this);
 	return EE_index.getNewAddress(size);
 }
+
+Scale* Scale::scales[] = {};
+unsigned char Scale::n_scales= 0;

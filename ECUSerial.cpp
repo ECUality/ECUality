@@ -83,6 +83,17 @@ char ECUSerial::addCommand(const __FlashStringHelper* new_command_str_F, const c
 	n_commands++;
 }
 
+char ECUSerial::addCommand(const char* new_command_str, const char(*function_ptr)(void*), void* object)
+{
+	for (unsigned char i = 0; i < N_CMD_CHARS; i++)
+	{
+		command_str[n_commands][i] = new_command_str[i];
+	}
+	fun_ptr[n_commands] = function_ptr;
+	obj_ptr[n_commands] = object;
+	n_commands++;
+}
+
 int ECUSerial::timedPeek(unsigned int timeout )
 {
 	unsigned long time = millis();

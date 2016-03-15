@@ -22,6 +22,15 @@ void setup()
 	ESerial.begin(9600);
 	//Serial.begin(115200);
 
+	// There are 3 levels of priority in this program.  
+	// Every event falls into one of these categories
+	// 1: Injector duration timing (highest)
+	// 2: Tasks that happen periodically (middle)
+	// 3: Responses to the user (lowest)
+	//
+	// The following "task" array contains the periods of the level-2 events. 
+	// Execution of these events can be interrupted by a level-1 event. 
+	// These events will interrupt execution of a level-3 event. 
 	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
 	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
 	task[2] = calcRPM;				ms_freq_of_task[2] = 50;
@@ -208,13 +217,12 @@ void calcInjDuration()
 		return;
 	}
 
-	/*
 	if (run_condition & _BV(IDLING))
 	{
-		inj_duration = idle_dur.value + ((idle_slope.value * (1000 - avg_rpm.average)) >> 10); 
+		// inj_duration = idle_dur.value + ((idle_slope.value * (1000 - avg_rpm.average)) >> 10); 
+		inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
 		return; 
 	}
-	*/
 
 	if (run_condition & _BV(COASTING))
 	{

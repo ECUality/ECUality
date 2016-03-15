@@ -8,7 +8,8 @@
 class Map
 {
 public:
-	explicit Map(const Scale* scale_p, unsigned char size = 8, int z_lower = 3500, int z_upper = 300);
+	explicit Map(const char* name_, const char handle_[4], const Scale* scale_p, 
+		unsigned char size = 8, int z_lower = 3500, int z_upper = 300);
 	~Map();
 	
 	static const char write(void * obj_ptr);
@@ -28,6 +29,9 @@ public:
 	unsigned int n;								// 3 ints
 	unsigned char ee_address_reg_index;		// the index of the ee address 
 	const Scale* scale;
+
+	const char* name;			// Used for referring to this object in serial messages.
+	const char* handle;			// Used to access Read, Write, Save functions in protocol. 
 
 private:
 	unsigned int ee_start_address; 

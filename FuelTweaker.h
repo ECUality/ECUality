@@ -32,8 +32,6 @@ class FuelTweaker
 	const int& avg_rpm; 
 	int& global_offset;
 
-	int& idle_dur; 
-
 	Map& offset_map;
 	Map& change_map; 
 
@@ -50,23 +48,30 @@ public:
 	// 1) here  2) constructor initialization list  3) constructor body for initial value  4) load func. 5) save func. 
 	// 6) report func.	7) ECUality.ino - "initProtocol" function adding write.  8) where it's used	
 
-	Parameter	o2_upper_thresh;
-	Parameter	o2_lower_thresh;	
-	Parameter	step_size;
-	Parameter	local_sum_limit;	
-	Parameter	rpm_hyst;
-	Parameter	idle_backstep;
-	
+	Parameter	o2_upper_thresh;		// the o2 value above which we begin to trim leaner. 
+	Parameter	o2_lower_thresh;		// the o2 value below which we begin to trim richer. 
+	Parameter	step_size;				// the size of single adjustments made during tuning
+	Parameter	local_sum_limit;		// limit on adjustment to the local map in one direction before altering global offset
+	Parameter	rpm_hyst;				// how sensitive the rpm optimizer is.  Smaller # = more sensitive. 
+	Parameter	idle_backstep;			// how far back we turn the idle enrichment screw after we see rpm fall. 
+		
 	// times in seconds
-	Parameter	time_warming_o2_thresh;
-	Parameter	time_eng_warm_thresh;
-	Parameter	time_running_thresh;
-	Parameter	idle_adjust_freq; 
+	Parameter	idle_adjust_freq;		// seconds between idle adjustments
+	Parameter	time_warming_o2_thresh;	// seconds after coasting before O2 tweaks resume
+	Parameter	time_eng_warm_thresh;	// seconds engine has to be warm before local tweaks start. 
+	Parameter	time_running_thresh;	// seconds engine has to be running before any O2 tweaks start.
 
 
-
-	FuelTweaker(const unsigned char& run_condition, const int& air_flow, const int& rpm, const int& avg_rpm, 
-		const int& o2, int& global_correction, int& idle_dur, Map& offset_map, Map& change_map);
+	
+	FuelTweaker(
+		const unsigned char& run_condition, 
+		const int& air_flow, 
+		const int& rpm, 
+		const int& avg_rpm,
+		const int& o2, 
+		int& global_correction, 
+		Map& offset_map, 
+		Map& change_map);
 	~FuelTweaker();
 	void tweak();
 	static const char status(void* obj_ptr);
