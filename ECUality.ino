@@ -22,6 +22,8 @@ void setup()
 	ESerial.begin(9600);
 	//Serial.begin(115200);
 
+	NameParams();
+
 	// There are 3 levels of priority in this program.  
 	// Every event falls into one of these categories
 	// 1: Injector duration timing (highest)
@@ -81,7 +83,7 @@ void setup()
 	TIMSK3 |= _BV(TOIE3);
 
 	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
-	//TIMSK0 &= 0x00;					
+	//TIMSK0 &= 0x00;		
 
 	// Configure Timer0 for generating a fast PWM.  16us period, 62.5kHz
 	// CONFIG BITS:
@@ -282,7 +284,8 @@ void updateRunCondition()
 	else if (digitalRead(cranking_pin))
 		run_condition |= _BV(CRANKING);
 
-	else if (air_flow < coasting_air.interpolate(rpm))
+	else if (idl_or_full && (air_flow < air_thresh.value))
+		//(air_flow < coasting_air.interpolate(rpm))
 	{
 		if (rpm > coasting_rpm.value)
 			run_condition |= _BV(COASTING);

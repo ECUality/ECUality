@@ -6,9 +6,9 @@
 #include "Arrays.h"
 
 
-Scale::Scale(const char* name_, const char handle_[4], int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p)
+Scale::Scale(const char handle_[4], int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p)
 {
-	name = name_;
+	setName(F("?"));		// put something in place 
 	handle = handle_;
 
 	n = n_p;
@@ -118,6 +118,10 @@ const char Scale::read(void* obj_ptr)
 	ESerial.reportArray("x: ", self->x, self->n);
 	ESerial.reportArray("y: ", self->y, self->n);
 	ESerial.println();
+}
+
+void Scale::setName(const __FlashStringHelper* name_) {
+	name = name_;
 }
 
 int Scale::interpolate(int x_key)

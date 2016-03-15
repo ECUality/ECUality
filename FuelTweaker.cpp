@@ -3,8 +3,6 @@
 #include "ECUSerial.h"
 
 
-
-
 FuelTweaker::FuelTweaker(
 	const unsigned char& run_condition_, 
 	const int& air_flow_, 
@@ -22,20 +20,31 @@ FuelTweaker::FuelTweaker(
 	time_warming_o2(0), time_eng_warm(0), rpm_old(0),		// internal ints
 	time_waiting(0),
 
-	o2_upper_thresh("", "out", 300, 1000),			// Internal Parameters
-	o2_lower_thresh("", "olt", 0, 700),
-	step_size("", "tsz", 0, 100),
-	local_sum_limit("", "lsl", 10, 300),
-	rpm_hyst("", "rph", 5, 150),					
-	idle_backstep("", "ibs", 20, 500),
+	o2_upper_thresh("out", 300, 1000),			// Internal Parameters
+	o2_lower_thresh("olt", 0, 700),
+	step_size("tsz", 0, 100),
+	local_sum_limit("lsl", 10, 300),
+	rpm_hyst("rph", 5, 150),					
+	idle_backstep("ibs", 20, 500),
 
-	idle_adjust_freq("", "iaf", 5, 600),
-	time_warming_o2_thresh("", "owi", 3, 90),
-	time_eng_warm_thresh("", "ewi", 30, 600),
-	time_running_thresh("", "eri", 30, 600),
+	idle_adjust_freq("iaf", 5, 600),
+	time_warming_o2_thresh("owi", 3, 90),
+	time_eng_warm_thresh("ewi", 30, 600),
+	time_running_thresh("eri", 30, 600),
 	
 	ee_addy(EE_index.getNewAddress(50))
 {
+	o2_upper_thresh.setName(F("O2_upper"));
+	o2_lower_thresh.setName(F("O2_lower"));
+	step_size.setName(F("O2_lower"));
+	local_sum_limit.setName(F("loc_sum_limit"));
+	rpm_hyst.setName(F("rpm_hyst"));
+	idle_backstep.setName(F("idle_backstep"));
+	idle_adjust_freq.setName(F("idle_adj_freq"));
+	time_warming_o2_thresh.setName(F("time_warming_o2"));
+	time_eng_warm_thresh.setName(F("time_eng_warm"));
+	time_running_thresh.setName(F("time_glo_only"));
+
 	/* This commented because these values initialized from EEPRPOM */
 	
 	o2_upper_thresh.value = 550;		

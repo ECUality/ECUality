@@ -2,7 +2,7 @@
 #include "HardwareSerial.h"
 
 #define SERIAL_TIMEOUT 50
-#define N_COMMANDS_MAX 150
+#define N_COMMANDS_MAX 50
 #define N_CMD_CHARS 5		// so we can use 4 characters
 //#define DUP_OUTPUT
 

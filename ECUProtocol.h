@@ -254,41 +254,40 @@ void initProtocol()
 	ESerial.addCommand(F("auto"), setReportMode, NULL);
 	ESerial.addCommand(F("lock"), FuelTweaker::lock, &boss);
 	ESerial.addCommand(F("mode"), reportMode, NULL);
+
 	ESerial.addCommand(F("+"), increaseGlobal, NULL);
 	ESerial.addCommand(F("-"), decreaseGlobal, NULL);
 	ESerial.addCommand(F("stat"), reportStatus, NULL);
 	ESerial.addCommand(F("para"), reportParams, NULL);
 	ESerial.addCommand(F("save"), saveData, NULL);
+
 	ESerial.addCommand(F("load"), loadData, NULL);
 	ESerial.addCommand(F("ee"), reportEEAddresses, NULL);
 	ESerial.addCommand(F("task"), reportTaskTimes, NULL);
-	ESerial.addCommand(F("mem"), memory, NULL);
-
+	ESerial.addCommand(F("mem"), memory, NULL);		//14
 
 	ESerial.addCommand(F("rbos"), FuelTweaker::status, &boss);
-	ESerial.addCommand(F("pbos"), FuelTweaker::reportParams, &boss);
+	ESerial.addCommand(F("pbos"), FuelTweaker::reportParams, &boss);	// 16
 
 	ESerial.addCommand(F("Winj"), Map::write, &inj_map);	// write a new injector map from what I send you next
 	ESerial.addCommand(F("rinj"), Map::read, &inj_map);		// report the injector map to the serial port
 	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);		// save the injector map to EEPROM
-	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM
+	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM - 20
 
 	// don't want write access to correction map.  Optimizer handles this.
 	ESerial.addCommand(F("rloc"), Map::read, &offset_map);
 	ESerial.addCommand(F("Sloc"), Map::save, &offset_map);
 	ESerial.addCommand(F("lloc"), Map::load, &offset_map);
-	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);
+	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);		// - 24
 	// don't want manual + or - control over correction map.  Optimizer handles this
 
 	ESerial.addCommand(F("rchg"), Map::read, &change_map);
 	ESerial.addCommand(F("Cchg"), Map::clear, &change_map);
-
-
-	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);
+	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 27
 
 	
-	// Here we register Read, Write and Save commands for every 
-	// declared Parameter and Scale.  
+	// Here we register Read, Write and Save commands for every Parameter and Scale.
+	/*
 	for ( i = 0; i < Parameter::n_params; i++)
 	{
 		param = Parameter::params[i];
@@ -317,7 +316,7 @@ void initProtocol()
 		ESerial.addCommand(cmd, Scale::read, scale);
 		cmd[0] = 'S';
 		ESerial.addCommand(cmd, Scale::save, scale);
-	}
+	} */
 
 	/*
 	ESerial.addCommand(F("Wolt"), Parameter::write, &(boss.o2_lower_thresh));

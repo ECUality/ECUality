@@ -3,11 +3,10 @@
 #include "EEPROMAnything.h"
 #include "EEIndex.h"
 
-Parameter::Parameter(const char * name_, const char handle_[4], int minimum, int maximum)
+Parameter::Parameter(const char handle_[4], int minimum, int maximum)
 {
-	name = name_;
 	handle = handle_;
-
+	setName(F("?"));		// for now, put something here to make dependent functions work. 
 	min = minimum;
 	max = maximum;
 	value = 0;
@@ -117,6 +116,10 @@ const char Parameter::clear(void* obj_ptr)
 		self->value = 0;
 	else
 		self->value = self->min;
+}
+
+void Parameter::setName(const __FlashStringHelper* name_) {
+	name = name_;
 }
 
 const unsigned int Parameter::getEEAddy(unsigned int size)

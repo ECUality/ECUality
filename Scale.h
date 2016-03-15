@@ -1,18 +1,21 @@
 #pragma once
 
+#include "ECUSerial.h"
+
 #define SCALE_SIZE_MAX	20
 #define SCALE_SIZE_MIN	2
 
 class Scale
 {
 public:
-	Scale(const char* name_, const char handle_[4], int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p = 8);
+	Scale(const char handle_[4], int x_lower_, int x_upper_, int y_lower_, int y_upper_, unsigned char n_p = 8);
 	~Scale();
 
 	static const char write(void * obj_ptr);
 	static const char read(void * obj_ptr);
 	static const char load(void * obj_ptr);
 	static const char save(void * obj_ptr);
+	void setName(const __FlashStringHelper* name_);
 
 	static Scale* scales[40];
 	static unsigned char n_scales;
@@ -25,7 +28,7 @@ public:
 	unsigned int n;								// the number elements in each array x, y
 	unsigned int ee_address;
 
-	const char* name;		// Used for referring to this object in serial messages.
+	const __FlashStringHelper* name;		// Used for referring to this object in serial messages.
 	const char* handle;		// Used to access Read, Write, Save functions in protocol. 
 
 private:

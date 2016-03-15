@@ -2,6 +2,8 @@
 #include "ECUSerial.h"
 #include "Arduino.h"
 #include "Arrays.h"
+#include "Parameter.h"
+#include "Scale.h"
 
 void Ftochar(const __FlashStringHelper *ifsh, char* c, uint8_t n)
 {
@@ -28,7 +30,7 @@ ECUSerial::~ECUSerial() { }
 
 void ECUSerial::executeCommand()
 {
-	char i;
+	char i, j;
 	char c[N_CMD_CHARS] = "";
 	
 	//if (!HSerial->available())
@@ -44,10 +46,7 @@ void ECUSerial::executeCommand()
 
 	// passes up any non-letters in the HSerial buffer.  Waits 20ms for each. 
 	if (dumpNonLetters() == -1)		// if only non-letters are showing up, fuggadaboutit. 
-	{
-		HSerial = DefaultSerial;
 		return;
-	}
 	
 
 	// reads at most 4 letters into string c.  The first non-letter encountered stops the reading. 
@@ -55,6 +54,59 @@ void ECUSerial::executeCommand()
 	readNLetters(c, N_CMD_CHARS - 1);
 
 	
+	// Is first letter one of W, R, S?
+	if ( (c[0] == 'W') || (c[0] == 'R') || (c[0] == 'S') )
+	{
+		// does suffix match known parameter handle? 
+		for (j = 0; j < Parameter::n_params; j++)
+		{
+			if (!strncmp(&c[1], Parameter::params[j]->handle, 3)) 
+			{
+				// suffix matches, so do the Write, Read or Save. 
+				if (c[0] == 'W')
+				{
+					Parameter::write(Parameter::params[j]);
+					return;
+				}
+				else if (c[0] == 'R')
+				{
+					Parameter::read(Parameter::params[j]);
+					return;
+				}
+				else if (c[0] == 'S')
+				{
+					Parameter::save(Parameter::params[j]);
+					return;
+				}
+			}
+		}
+
+		// does suffix match known scale handle? 
+		for (j = 0; j < Scale::n_scales; j++)
+		{
+			
+			if (!strncmp(&c[1], Scale::scales[j]->handle, 3))
+			{
+				if (c[0] == 'W')
+				{
+					Scale::write(Scale::scales[j]);
+					return;
+				}
+				else if (c[0] == 'R')
+				{
+					Scale::read(Scale::scales[j]);
+					return;
+				}
+				else if (c[0] == 'S')
+				{
+					Scale::save(Scale::scales[j]);
+					return;
+				}
+			}
+		}
+	}
+	
+	// 
 	for (i = 0; i < n_commands; i++)
 	{
 		if (!strncmp(c, command_str[i], strlen(command_str[i])))		// if the strings match, strncmp returns 0
@@ -62,7 +114,7 @@ void ECUSerial::executeCommand()
 			// call attached function on the attached object. 
 			(*fun_ptr[i])(obj_ptr[i]);
 			//dumpNonLetters();
-			HSerial = DefaultSerial;
+			//HSerial = DefaultSerial;
 			return;
 		}
 	}
@@ -71,7 +123,7 @@ void ECUSerial::executeCommand()
 	HSerial->println(c);
 	dumpLine();
 
-	HSerial = DefaultSerial;
+	//HSerial = DefaultSerial;
 	return;
 }
 
