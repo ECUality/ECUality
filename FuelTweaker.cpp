@@ -33,7 +33,7 @@ FuelTweaker::FuelTweaker(
 {
 	o2_upper_thresh.setName(F("O2_upper"));
 	o2_lower_thresh.setName(F("O2_lower"));
-	step_size.setName(F("O2_lower"));
+	step_size.setName(F("tweak_step_sz"));
 	local_sum_limit.setName(F("loc_sum_limit"));
 	time_warming_o2_thresh.setName(F("time_warming_o2"));
 	time_eng_warm_thresh.setName(F("time_eng_warm"));

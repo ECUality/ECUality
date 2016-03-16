@@ -134,5 +134,5 @@ const bool Parameter::verify(const int new_value)
 	return ((new_value >= min) && (new_value <= max));
 }
 
-Parameter* Parameter::params[] = {};
-unsigned char Parameter::n_params = 0;
+Parameter* Parameter::params[] = {};		// an array of pointers to all Parameter objects
+unsigned char Parameter::n_params = 0;		// the total number of Parameter objects

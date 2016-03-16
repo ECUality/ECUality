@@ -163,5 +163,5 @@ const unsigned int Scale::getEEAddy(unsigned int size)
 	return EE_index.getNewAddress(size);
 }
 
-Scale* Scale::scales[] = {};
-unsigned char Scale::n_scales= 0;
+Scale* Scale::scales[] = {};	// an array of pointers to all Scale objects
+unsigned char Scale::n_scales= 0;	// the total number of Scale objects

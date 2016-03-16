@@ -2,7 +2,13 @@
 
 #include "Globals.h"
 #include "EEIndex.h"
+#include "EEPROMAnything.h"
 #include "ECUPins.h"
+
+
+char param_to_edit;				// the parameter or scale selected for adjustment 
+char index_to_edit;				// the index of the scale Y-point selected for adjustment by dash terminal 
+unsigned int adjustment_size;		// how much a parameter changes from one up/down button press.
 
 template<typename T>
 void interject(T input)
@@ -199,17 +205,7 @@ const char setReportMode(void* obj_ptr)
 }
 
 
-const char increaseGlobal(void* obj_ptr)
-{
-	global_offset.value += 10;
-	interject("+");	
-}
-const char decreaseGlobal(void* obj_ptr)
-{
-	global_offset.value -= 10;
-	interject("-");
-}
-const char enableDrive(void* obj_ptr)
+void enableDrive()
 {
 	if (good_ee_loads)
 	{
@@ -220,14 +216,25 @@ const char enableDrive(void* obj_ptr)
 	}
 	else
 		interjectln(F("bad data, no go"));
-
 }
-const char disableDrive(void* obj_ptr)
+void disableDrive()
 {
 	digitalWrite(fuel_pin, LOW);
 	digitalWrite(drv_en_pin, HIGH);		// this turns off the injectors and ignition
 	//detachInterrupt(4);
 	interjectln(F("disarmed"));
+}
+const char toggleEnable(void* obj_ptr) {
+	if (digitalRead(fuel_pin))		// if the fuel pump is on, turn it off. 
+	{
+		disableDrive();
+		EEPROM_writeAnything(ENABLE_ADDY, 0);		// this way, we wake in the same state for theft prevention 
+	}
+	else
+	{
+		enableDrive();
+		EEPROM_writeAnything(ENABLE_ADDY, 1);
+	}
 }
 const char memory(void* obj_ptr)
 {
@@ -240,48 +247,146 @@ const char memory(void* obj_ptr)
 	return 0;
 }
 
+void displayScalePoint(Scale* selected_scale) {
+	ESerial.print("!");			// bottom row. 
+	ESerial.print(selected_scale->handle);
+	ESerial.print(F(" x"));
+	ESerial.print(selected_scale->x[index_to_edit]);
+	ESerial.print(F(" y"));
+	ESerial.println(selected_scale->y[index_to_edit]);
+}
+void displaySelectedParam() {
+	if (param_to_edit < Parameter::n_params)
+	{
+		ESerial.print("!");
+		ESerial.println(Parameter::params[param_to_edit]->name);
+	}
+	else
+		displayScalePoint(Scale::scales[param_to_edit - Parameter::n_params]);
+}
+
+const char selectNextParamToEdit(void* obj_ptr) {
+
+	index_to_edit = 0;
+
+	if (++param_to_edit >= (Parameter::n_params + Scale::n_scales))
+		param_to_edit = 0;
+	
+	displaySelectedParam();
+}
+const char selectPrevParamToEdit(void* obj_ptr) {
+
+	index_to_edit = 0;
+
+	if (--param_to_edit < 0)
+		param_to_edit = (Parameter::n_params + Scale::n_scales - 1);
+
+	displaySelectedParam();
+}
+const char selectNextPointToEdit(void* obj_ptr) {
+
+	if (param_to_edit >= Parameter::n_params)		// only increment if we have selected a scale
+	{
+		if (++index_to_edit >= Scale::scales[param_to_edit - Parameter::n_params]->n)
+			index_to_edit = 0;
+
+		displayScalePoint(Scale::scales[param_to_edit - Parameter::n_params]);
+	}
+
+}
+
+void adjustParameter(unsigned char going_up) {
+	
+	if (param_to_edit < Parameter::n_params)		// we're editing a parameter
+	{
+		if (going_up)
+			Parameter::params[param_to_edit]->value += adjustment_size; 
+		else 
+			Parameter::params[param_to_edit]->value -= adjustment_size;
+
+		ESerial.print("!");			// bottom row. 
+		ESerial.print(Parameter::params[param_to_edit]->handle);
+		ESerial.print(F(": "));
+		ESerial.println(Parameter::params[param_to_edit]->value);
+	}
+	else	// we're editing a scale 
+	{
+		if (going_up)
+			Scale::scales[param_to_edit-Parameter::n_params]->y[index_to_edit] += adjustment_size;
+		else 
+			Scale::scales[param_to_edit - Parameter::n_params]->y[index_to_edit] -= adjustment_size;
+
+		displayScalePoint(Scale::scales[param_to_edit - Parameter::n_params]);
+	}
+}
+const char increaseParameter(void* obj_ptr) {
+	adjustParameter(1);
+}
+const char decreaseParameter(void* obj_ptr) {
+	adjustParameter(0);
+}
+
+const char increaseAdjustmentSize(void* obj_ptr) {
+	if (adjustment_size <= 32)
+		adjustment_size *= 4;	// adjustment_size *= 4;
+	ESerial.print(F("!step-size: "));
+	ESerial.println(adjustment_size);
+}
+const char decreaseAdjustmentSize(void *obj_ptr) {
+	if (adjustment_size >= 4)
+		adjustment_size /= 4;	
+	ESerial.print(F("!step-size: "));
+	ESerial.println(adjustment_size);
+}
 
 void initProtocol()
 {
 	char cmd[5];
 	unsigned char i;
 
-	Parameter* param;
-	Scale* scale;
+	param_to_edit = 0;
+	index_to_edit = 0;
+	adjustment_size = 1; 
 
-	ESerial.addCommand(F("x"), disableDrive, NULL);
-	ESerial.addCommand(F("arm"), enableDrive, NULL);
+	ESerial.addCommand(F("arm"), toggleEnable, NULL);
 	ESerial.addCommand(F("auto"), setReportMode, NULL);
 	ESerial.addCommand(F("lock"), FuelTweaker::lock, &boss);
-	ESerial.addCommand(F("mode"), reportMode, NULL);			// 5
+	ESerial.addCommand(F("mode"), reportMode, NULL);			// 4
 
-	ESerial.addCommand(F("+"), increaseGlobal, NULL);
-	ESerial.addCommand(F("-"), decreaseGlobal, NULL);
+	ESerial.addCommand(F("+"), increaseParameter, NULL);
+	ESerial.addCommand(F("-"), decreaseParameter, NULL);
 	ESerial.addCommand(F("stat"), reportStatus, NULL);
 	ESerial.addCommand(F("para"), reportParams, NULL);
-	ESerial.addCommand(F("save"), saveData, NULL);				// 10
+	ESerial.addCommand(F("save"), saveData, NULL);				// 9
 
 	ESerial.addCommand(F("load"), loadData, NULL);
 	ESerial.addCommand(F("ee"), reportEEAddresses, NULL);
 	ESerial.addCommand(F("task"), reportTaskTimes, NULL);
 	ESerial.addCommand(F("mem"), memory, NULL);					//14
 
+	ESerial.addCommand(F("nxtp"), selectNextParamToEdit, NULL);
+	ESerial.addCommand(F("prep"), selectPrevParamToEdit, NULL);
+	ESerial.addCommand(F("nxti"), selectNextPointToEdit, NULL);
+	ESerial.addCommand(F("dbl"), increaseAdjustmentSize, NULL);
+	ESerial.addCommand(F("hlf"), decreaseAdjustmentSize, NULL);		// 19
+
+
 	ESerial.addCommand(F("rbos"), FuelTweaker::status, &boss);
-	ESerial.addCommand(F("pbos"), FuelTweaker::reportParams, &boss);	// 16
+	ESerial.addCommand(F("pbos"), FuelTweaker::reportParams, &boss);	// 21
 
 	ESerial.addCommand(F("Winj"), Map::write, &inj_map);	// write a new injector map from what I send you next
 	ESerial.addCommand(F("rinj"), Map::read, &inj_map);		// report the injector map to the serial port
 	ESerial.addCommand(F("Sinj"), Map::save, &inj_map);		// save the injector map to EEPROM
-	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM - 20
+	ESerial.addCommand(F("linj"), Map::load, &inj_map);		// load theh injector map from EEPROM - 25
 
 	ESerial.addCommand(F("Wloc"), Map::write, &offset_map);
 	ESerial.addCommand(F("rloc"), Map::read, &offset_map);
 	ESerial.addCommand(F("Sloc"), Map::save, &offset_map);
 	ESerial.addCommand(F("lloc"), Map::load, &offset_map);
-	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);		// - 25
+	ESerial.addCommand(F("Cloc"), Map::clear, &offset_map);		// - 30
 
 	ESerial.addCommand(F("rchg"), Map::read, &change_map);
 	ESerial.addCommand(F("Cchg"), Map::clear, &change_map);
-	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 28
+	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 33  Currently max is 50
 
 }

@@ -33,8 +33,11 @@ int air_flow_d, air_flow_snap, o2_d;
 // fault counters
 unsigned int n_rpm_hi_faults, n_rpm_lo_faults, n_air_faults;
 
+// selected parameter to change
+
 // EE-Backed Parameters //////////////////////////////////
 
+Parameter idle_offset("iof", -1000, 1000);			// Just like global offset, but only used during idle conditions
 Parameter global_offset("glo", -1000, 1000);
 Parameter coasting_rpm("crp", 800, 2500);
 Parameter idling_rpm("irp", 400, 2200);
@@ -49,11 +52,10 @@ Map offset_map("offset_map", "loc", &air_rpm_scale, 8, -1500, 1500); // local mo
 Map change_map("change_map", "chg", &air_rpm_scale, 8, -1500, 1500);	// map that contains the changes made since power-up. 
 
 // Added 3-5-2016 
-Parameter idle_offset("iof", -1000, 1000);			// Just like global offset, but only used during idle conditions
 Scale idle_scale("isc", 0, 2200, 300, 1100, 2);		// Linear "map" RPM v inj.Dur at idle.  Higher dur at lower RPM. 
 
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
-	global_offset.value, offset_map, change_map);				// presently contains 10 parameters
+	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
 
 void NameParams() {
 	global_offset.setName(F("global_offset"));

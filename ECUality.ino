@@ -19,6 +19,8 @@
  //////////////////// pogram ///////////////////
 void setup()
 {
+	char enable = 0;
+
 	ESerial.begin(9600);
 	//Serial.begin(115200);
 
@@ -93,7 +95,13 @@ void setup()
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
 
 	attachInterrupt(tach_interrupt, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
-	enableDrive(NULL);
+
+	EEPROM_readAnything(ENABLE_ADDY, enable);
+	if (enable)
+		enableDrive();
+	else
+		ESerial.println(F("fuck off asshole"));
+
 	auto_stat = 1; // turn on auto-reporting. 
 }
 void setPinModes(const uint8_t pins[], const uint8_t direction)
@@ -137,8 +145,8 @@ void readAirFlow()
 	if (air_flow_d > 20)
 	{
 		n_air_faults++;
-		ESerial.print(F("!air flt: "));
-		ESerial.println(n_air_faults);
+		//ESerial.print(F("!air flt: "));
+		//ESerial.println(n_air_faults);
 	}
 
 	/*
@@ -193,14 +201,14 @@ void calcRPM()
 		if (rpm > avg_rpm.average)
 		{
 			n_rpm_hi_faults++;
-			ESerial.print("!RPM xtra ");
-			ESerial.println(n_rpm_hi_faults);
+			//ESerial.print("!RPM xtra ");
+			//ESerial.println(n_rpm_hi_faults);
 		}
 		else
 		{
 			n_rpm_lo_faults++;
-			ESerial.print(F("!RPM miss "));
-			ESerial.println(n_rpm_lo_faults);
+			//ESerial.print(F("!RPM miss "));
+			//ESerial.println(n_rpm_lo_faults);
 		}
 
 		

@@ -16,3 +16,4 @@
 
 #define TWEAK_FREQ_MS 200
 #define TWEAKS_PER_SEC 5
+#define ENABLE_ADDY 3001

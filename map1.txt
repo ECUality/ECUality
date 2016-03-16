@@ -1,11 +1,11 @@
 
 
-
 # acceleration enrichment stabilize rate
 # cold engine threshold 
 # cranking duration nominal 
 # choke scale (extra injector duration vs coolant temperature) 
 
+Wiof 1
 Wglo -171
 Wcrp 1500
 Wirp 1400
@@ -61,7 +61,6 @@ Wlsl 300
 Wowi 20
 Wewi 30
 Weri 30
-Wiaf 100
 
-Sbos
-S
+save
+Sloc
