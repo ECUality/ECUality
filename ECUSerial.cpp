@@ -18,7 +18,7 @@ void Ftochar(const __FlashStringHelper *ifsh, char* c, uint8_t n)
 }
 
 ECUSerial::ECUSerial() :
-HSerial(&Serial),		// Selects either Serial (USB) and Serial3 (Xbee) for primary comm. 
+HSerial(&Serial3),		// Selects either Serial (USB) and Serial3 (Xbee) for primary comm. 
 DefaultSerial(HSerial)
 {
 	n_commands = 0;

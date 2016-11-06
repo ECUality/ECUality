@@ -9,7 +9,7 @@
 #include "ECUProtocol.h"
 #include "Interpolation.h"
 #include "EEIndex.h"
-#include <eeprom.h>
+#include <EEPROM.h>
 #include "EEPROMAnything.h"
 #include "ECUPins.h"
 #include "FuelTweaker.h"
@@ -230,7 +230,8 @@ void calcInjDuration()
 
 	if (run_condition & _BV(IDLING))
 	{
-		inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
+		new_inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
+		inj_duration = (new_inj_duration + adjustForColdEngine(new_inj_duration, coolant_temp));
 		return; 
 	}
 

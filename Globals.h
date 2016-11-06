@@ -52,12 +52,13 @@ Map offset_map("offset_map", "loc", &air_rpm_scale, 8, -1500, 1500); // local mo
 Map change_map("change_map", "chg", &air_rpm_scale, 8, -1500, 1500);	// map that contains the changes made since power-up. 
 
 // Added 3-5-2016 
-Scale idle_scale("isc", 0, 2200, 300, 1100, 2);		// Linear "map" RPM v inj.Dur at idle.  Higher dur at lower RPM. 
+Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur at idle.  Higher dur at lower RPM. 
 
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
 
 void NameParams() {
+	// We need this step to be separate from the constructor only because the F() macro has to live inside a function.  
 	global_offset.setName(F("global_offset"));
 	coasting_rpm.setName(F("coasting_rpm"));
 	idling_rpm.setName(F("idling_rpm"));
