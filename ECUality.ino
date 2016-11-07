@@ -9,20 +9,24 @@
 #include "ECUProtocol.h"
 #include "Interpolation.h"
 #include "EEIndex.h"
-#include <EEPROM.h>
 #include "EEPROMAnything.h"
 #include "ECUPins.h"
 #include "FuelTweaker.h"
 #include "MovingAverage.h"
+#include "SPICommands.h"
+#include <EEPROM.h>
+#include <SPI.h>
 
 
- //////////////////// pogram ///////////////////
 void setup()
 {
 	char enable = 0;
 
 	ESerial.begin(9600);
 	//Serial.begin(115200);
+
+	InitSPI();
+	
 
 	NameParams();
 
@@ -57,7 +61,10 @@ void setup()
 	setPinModes(inputs, INPUT);
 	setPinModes(outputs, OUTPUT);
 	pinMode(40, INPUT);		// the other hooked-up inj1_pin. 
-	//pinMode(drv_en_pin, OUTPUT);
+	
+	digitalWrite(cs_inj_pin, HIGH);
+	digitalWrite(cs_knock_pin, HIGH);
+	digitalWrite(cs_sd_pin, HIGH);
 
 	//pinMode(coil1_pin,)
 	//pinMode(13, OUTPUT);
@@ -70,6 +77,7 @@ void setup()
 	initProtocol();						// set up protocol. 
 	
 	// TIMERS
+	// Configure Timer1 for task scheduling.  Hits ICR1 every 2ms and runs interrupt. 
 	TCCR1A = 0;				// disables all output compare modules and clears WGM1<0-1> 
 	TCCR1B = _BV(CS10);		// sets prescaler to 1:1, and turns on timer, clears WGM1<3:2>
 	TCCR1B |= _BV(WGM12) | _BV(WGM13);	// 
@@ -82,9 +90,17 @@ void setup()
 	TCCR3B = _BV(CS31) | _BV(CS30);		// start the timer at clk/64 prescale. 
 
 	TIMSK3 |= _BV(OCIE3A);				// enable output compare A interrupt on timer 3
-	TIMSK3 |= _BV(TOIE3);
+	TIMSK3 |= _BV(TOIE3);				// enable timer overflow interrupt on timer 3 (just-in-case-of-something-weird)
+
+	// Configure Timer4 for measuring ignition dwell (using interrupt)
+	TCCR4A = 0;							// clear control register A 
+	TCCR4B = _BV(CS41) | _BV(CS40);		// start the timer at clk/64 prescale. 
+
+	TIMSK4 |= _BV(OCIE4A);				// enable output compare A interrupt on timer 3
+
 
 	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
+	// note: ECUSerial.cpp uses millis() to time communication-stream events.  
 	//TIMSK0 &= 0x00;		
 
 	// Configure Timer0 for generating a fast PWM.  16us period, 62.5kHz
@@ -100,9 +116,10 @@ void setup()
 	if (enable)
 		enableDrive();
 	else
-		ESerial.println(F("fuck off asshole"));
+		ESerial.println(F("fuck off asshole"));		// said to either my forgetful self, or a van-thief. 
 
 	auto_stat = 1; // turn on auto-reporting. 
+	SPIInitSparkMode();	// use 8ms timeout on dwell
 }
 void setPinModes(const uint8_t pins[], const uint8_t direction)
 {
@@ -390,7 +407,14 @@ ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt
 }
 void isrTachRisingEdge()
 {
-	static char pulse_divider = 0;	// the actions happen every other pulse.  We use pulse_divider for that.
+	// these ignition actions happen every pulse 
+	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
+
+	// set a timer for when we begin dwell again
+	TCNT4 = 0;
+
+	// these fuel injection actions happen every other pulse.  We use pulse_divider to track which pulse we're on.
+	static char pulse_divider = 0;	
 	if (!pulse_divider)
 	{
 		GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
@@ -400,8 +424,8 @@ void isrTachRisingEdge()
 		// set all injectors high (in same instruction)
 		if (inj_duration)
 		{
-			PORTL |= 0xAA;				// 0b10101010;
-			PORTA |= 0x08;				// 0b00001000  (A3 is turned on) 
+			PORTL |= 0xAA;				// 0b 1010 1010;
+			PORTA |= 0x08;				// 0b 0000 1000  (A3 is turned on) 
 		}
 		pulse_divider = 1;
 	}
@@ -417,4 +441,8 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 ISR(TIMER3_OVF_vect)
 {
 	tach_period = 0xFFFF;	// this makes it obvious the engine is not running
+}
+ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A. 
+{
+	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
 }

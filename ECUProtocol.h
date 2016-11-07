@@ -4,6 +4,7 @@
 #include "EEIndex.h"
 #include "EEPROMAnything.h"
 #include "ECUPins.h"
+#include "SPICommands.h"
 
 
 char param_to_edit;				// the parameter or scale selected for adjustment 
@@ -339,6 +340,13 @@ const char decreaseAdjustmentSize(void *obj_ptr) {
 	ESerial.println(adjustment_size);
 }
 
+
+
+const char CheckStatusMC33810(void* obj_ptr) {
+	SPIAllStatus();
+}
+
+
 void initProtocol()
 {
 	char cmd[5];
@@ -387,6 +395,9 @@ void initProtocol()
 
 	ESerial.addCommand(F("rchg"), Map::read, &change_map);
 	ESerial.addCommand(F("Cchg"), Map::clear, &change_map);
-	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 33  Currently max is 50
+	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 33  
+	
+	ESerial.addCommand(F("spia"), CheckStatusMC33810, NULL);	// - 34
 
+	//Currently max is 50
 }

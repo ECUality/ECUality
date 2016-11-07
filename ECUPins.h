@@ -1,6 +1,8 @@
 #pragma once
 
-// Pin mappings
+// Pin mappings /////////////////
+
+// Input pins
 const uint8_t air_flow_pin = A12;
 const uint8_t air_temp_pin = A14;
 const uint8_t o2_pin = A9;
