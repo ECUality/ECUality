@@ -118,7 +118,7 @@ void setup()
 	// COM0B<1:0>	= 2 (10)	same as A.
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
 
-	attachInterrupt(tach_interrupt, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+	attachInterrupt(tach_interrupt, isrTachFallingEdge, FALLING);	// interrupt 4 maps to pin 19. 
 	attachInterrupt(coil_current_interrupt, isrCoilNominalCurrent, RISING);	// interrupt 3 maps to pin 20. 
 
 	EEPROM_readAnything(ENABLE_ADDY, enable);
@@ -432,7 +432,7 @@ ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt
 							
 					
 }
-void isrTachRisingEdge()
+void isrTachFallingEdge()
 {
 	// Spark!  (time-sensitive, hence placement at top of this ISR)
 	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
