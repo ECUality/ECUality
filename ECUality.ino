@@ -41,7 +41,7 @@ void setup()
 	// These events will interrupt execution of a level-3 event. 
 	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
 	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
-	task[2] = calcRPM;				ms_freq_of_task[2] = 50;
+	task[2] = calcRPMandDwell;		ms_freq_of_task[2] = 50;
 	task[3] = calcInjDuration;		ms_freq_of_task[3] = 50;
 	task[4] = updateInjectors;		ms_freq_of_task[4] = 50;
 	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
@@ -51,6 +51,7 @@ void setup()
 	task[9] = updateRunCondition;	ms_freq_of_task[9] = 100;
 	task[10] = tweakFuel;			ms_freq_of_task[10] = TWEAK_FREQ_MS;
 	n_tasks = 11;
+
 	i_autoreport = 8;		// this is referenced to delay next autoreport message.  
 
 	// input interrupt pin
@@ -70,6 +71,7 @@ void setup()
 	//pinMode(13, OUTPUT);
 
 	inj_duration = 5;
+	tach_period = old_tach_period = 0;
 	
 	Map::clear(&change_map);
 	good_ee_loads = loadData(NULL);		// load data from EE.
@@ -90,14 +92,20 @@ void setup()
 	TCCR3B = _BV(CS31) | _BV(CS30);		// start the timer at clk/64 prescale. 
 
 	TIMSK3 |= _BV(OCIE3A);				// enable output compare A interrupt on timer 3
-	TIMSK3 |= _BV(TOIE3);				// enable timer overflow interrupt on timer 3 (just-in-case-of-something-weird)
+	//TIMSK3 |= _BV(TOIE3);				// enable timer overflow interrupt on timer 3 (just-in-case-of-something-weird)
 
 	// Configure Timer4 for measuring ignition dwell (using interrupt)
 	TCCR4A = 0;							// clear control register A 
 	TCCR4B = _BV(CS41) | _BV(CS40);		// start the timer at clk/64 prescale. 
 
-	TIMSK4 |= _BV(OCIE4A);				// enable output compare A interrupt on timer 3
+	// enable timer overflow interrupt for non-running and slow-cranking issues
+	TIMSK4 |= _BV(TOIE4);	// this affects rpm calculation for low RPM
 
+	// Timer4 NOTE: updateDwell() enables or disables the ignition system by 
+	// setting or clearing OCIE4A, the output compare interrupt enable bit. 
+	// The Output compare interrupt is what starts the dwells.
+	// It is important for engine-start that we NOT set OCIE4A here. 
+	
 
 	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
 	// note: ECUSerial.cpp uses millis() to time communication-stream events.  
@@ -111,6 +119,7 @@ void setup()
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
 
 	attachInterrupt(tach_interrupt, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+	attachInterrupt(coil_current_interrupt, isrCoilNominalCurrent, RISING);	// interrupt 3 maps to pin 20. 
 
 	EEPROM_readAnything(ENABLE_ADDY, enable);
 	if (enable)
@@ -119,7 +128,10 @@ void setup()
 		ESerial.println(F("fuck off asshole"));		// said to either my forgetful self, or a van-thief. 
 
 	auto_stat = 1; // turn on auto-reporting. 
-	SPIInitSparkMode();	// use 8ms timeout on dwell
+
+	// following sets an 8ms timeout on dwell with soft shutdown. 
+	// it must come some significant time after SPIInit().  Hence this placement. 
+	SPIInitSparkMode();	
 }
 void setPinModes(const uint8_t pins[], const uint8_t direction)
 {
@@ -203,17 +215,21 @@ void readOilPressure()
 	// 1 psi ~ 8 tics. 
 	oil_pressure = analogRead(oil_pressure_pin);
 }
-void calcRPM()
+void calcRPMandDwell()
 {
-
+	static int old_rpm = 0;
 	// (60e6 us/min) / (4 us/tic)				= 15e6 tics/min
 	// (tics/min) / (tach_period tics/pulse)	= pulses/min
 	// pulses/min * (1 rev/pulse)				= 15e6 / tach_period 
 	// we're pulsing the injectors (and measuring) every other tach input pulse, so it's 1:1 with crankshaft. 
-	rpm = 15000000 / tach_period;
+	old_rpm = rpm;
+	rpm = TICS_PER_TACH / tach_period;
+	rpm_d = old_rpm - rpm;
 	avg_rpm.addSample(rpm);
 	
-	if (!(run_condition & _BV(NOT_RUNNING) ) && (abs(rpm - avg_rpm.average) > 1000))
+	// This section says if we're running, and the rpm makes an abrupt change, 
+	// it's a fault.  Log it.  
+	if (!(run_condition & _BV(NOT_RUNNING) ) && (abs(rpm_d) > 1000))
 	{
 		if (rpm > avg_rpm.average)
 		{
@@ -227,9 +243,20 @@ void calcRPM()
 			//ESerial.print(F("!RPM miss "));
 			//ESerial.println(n_rpm_lo_faults);
 		}
-
-		
 	}
+	
+	////// DWELL SECTION ////////////
+	// we only start charging coil if RPM is at least 200
+
+	if (rpm > MIN_IGN_RPM)
+		TIMSK4 |= _BV(OCIE4A);	// enable the ignition system.
+	else
+		TIMSK4 &= ~_BV(OCIE4A);		// disable ignition system. 
+
+	if (rpm < 800)
+		g_dwell = low_speed_dwell.value;	//this is a longer dwell
+	else
+		g_dwell = hi_speed_dwell.value;
 }
 
 // Pulse duration business
@@ -407,18 +434,17 @@ ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt
 }
 void isrTachRisingEdge()
 {
-	// these ignition actions happen every pulse 
+	// Spark!  (time-sensitive, hence placement at top of this ISR)
 	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
 
-	// set a timer for when we begin dwell again
-	TCNT4 = 0;
 
 	// these fuel injection actions happen every other pulse.  We use pulse_divider to track which pulse we're on.
 	static char pulse_divider = 0;	
 	if (!pulse_divider)
 	{
 		GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
-		tach_period = TCNT3; 		// record the timer setting 
+
+		//tach_period = TCNT3; 		// record the timer setting 
 		TCNT3 = 0;					// start the timer over. 
 
 		// set all injectors high (in same instruction)
@@ -431,6 +457,18 @@ void isrTachRisingEdge()
 	}
 	else
 		--pulse_divider;
+
+	// Finish the ignition operations here.  (Dwell is not as time-sensitive)
+	old_tach_period = tach_period;
+	// spark period measured separately to handle low-rpm and update every pulse. 
+	tach_period = TCNT4;
+	// set a timer for when we begin dwell again
+	TCNT4 = 0;
+	// here we set the on-time for charging the coil (dwell) to be 
+	// dwell.value * 4us before the next predicted tach rising edge.
+	OCR4A = tach_period - g_dwell;
+	
+
 }
 ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A. 
 {
@@ -438,11 +476,16 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 	PORTL &= ~0xAA;			// 0b01010101; 
 	PORTA &= ~0x08;				// 
 }
-ISR(TIMER3_OVF_vect)
-{
-	tach_period = 0xFFFF;	// this makes it obvious the engine is not running
-}
+
 ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A. 
 {
 	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
+}
+ISR(TIMER4_OVF_vect)
+{
+	tach_period = 0xFFFF;	// this makes it obvious the engine is not running
+	rpm = 0;
+}
+void isrCoilNominalCurrent() {
+	coil_current_flag = 1;
 }

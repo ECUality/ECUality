@@ -24,11 +24,16 @@ uint8_t i_autoreport;
 
 // sensor input variables
 int air_flow, rpm, o2, air_temp, coolant_temp, oil_pressure;
-unsigned int tach_period, inj_duration;
+unsigned int inj_duration;
+
+// Ignition variables
+unsigned int tach_period, old_tach_period, g_dwell;	
+unsigned char coil_current_flag;
 MovingAverage avg_rpm(4);
 
 // variables that capture dynamic aspects of sensor input
-int air_flow_d, air_flow_snap, o2_d;
+int air_flow_d, air_flow_snap, o2_d, rpm_d;
+//unsigned int last_tach_period;
 
 // fault counters
 unsigned int n_rpm_hi_faults, n_rpm_lo_faults, n_air_faults;
@@ -51,11 +56,13 @@ Map inj_map("inj_map", "inj", &air_rpm_scale, 8, 400, 3000);	// the 2d map defin
 Map offset_map("offset_map", "loc", &air_rpm_scale, 8, -1500, 1500); // local modifications to the inj_map, applied by the optimizer. 
 Map change_map("change_map", "chg", &air_rpm_scale, 8, -1500, 1500);	// map that contains the changes made since power-up. 
 
-// Added 3-5-2016 
 Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur at idle.  Higher dur at lower RPM. 
 
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
+
+Parameter low_speed_dwell("lsd", 250, 2500);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
+Parameter hi_speed_dwell("hsd", 250, 2500);
 
 void NameParams() {
 	// We need this step to be separate from the constructor only because the F() macro has to live inside a function.  
@@ -65,8 +72,10 @@ void NameParams() {
 	air_thresh.setName(F("air_thresh"));
 	cold_threshold.setName(F("cold_threshold"));
 	cranking_dur.setName(F("cranking_dur"));
-
 	idle_offset.setName(F("idle_offset"));
+	low_speed_dwell.setName(F("ls_dwell"));
+	hi_speed_dwell.setName(F("hs_dwell"));
+
 
 	// Scales
 	choke_scale.setName(F("choke_scale"));

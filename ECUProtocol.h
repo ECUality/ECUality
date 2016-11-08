@@ -346,6 +346,28 @@ const char CheckStatusMC33810(void* obj_ptr) {
 	SPIAllStatus();
 }
 
+const char CheckCoilCurrent(void* obj_ptr) {
+	// here we set the nominal compare current on the MC33810 progressively higher
+	// until we don't see it tripping for a spark cycle. 
+
+	float current = 3;
+	char nomi;
+	// start with lowest NOMI = 0
+	for (nomi = 0; nomi <= 31; nomi++)
+	{
+		// set the nominal current DAC 
+		SPISetNOMI(nomi);
+		coil_current_flag = 0;
+		_delay_ms(100);
+		if (!coil_current_flag)
+			break;
+	}
+	// caluclate the current from nomi. 
+	current += 0.25 * (nomi--);
+	ESerial.print(F("Current: "));
+	ESerial.println(current);
+}
+
 
 void initProtocol()
 {
@@ -398,6 +420,7 @@ void initProtocol()
 	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 33  
 	
 	ESerial.addCommand(F("spia"), CheckStatusMC33810, NULL);	// - 34
+	ESerial.addCommand(F("curr"), CheckCoilCurrent, NULL);
 
 	//Currently max is 50
 }
