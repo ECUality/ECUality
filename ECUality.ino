@@ -254,7 +254,13 @@ void calcRPMandDwell()
 		TIMSK4 &= ~_BV(OCIE4A);		// disable ignition system. 
 
 	if (rpm < 800)
+	{
 		g_dwell = low_speed_dwell.value;	//this is a longer dwell
+		if (digitalRead(cranking_pin))
+		{
+			g_dwell += 1500;		// and extra 6ms while starter is cranking
+		}
+	}
 	else
 		g_dwell = hi_speed_dwell.value;
 }

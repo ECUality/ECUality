@@ -37,12 +37,12 @@ uint16_t InterrogateMC(uint16_t spi_send) {
 }
 
 void SPIInitSparkMode() {
-	// 0x473D = 
-	// <11-8> max dwell = 16ms, max dwell protect enabled, 
+	// 0x493D = 
+	// <11-8> max dwell = 32ms, max dwell protect enabled, 
 	// <7-6> overlap dwell disabled, feedback gain for 40mohm, 
 	// <5-4> soft shutdown enabled, open 2nd clamp enabled, 
 	// <3-0> open 2nd fault = 100us, end spark threshold = Vpwr + 5.5V. 
-	InterrogateMC(0x473D);	// Set max dwell = 16ms and enable soft shutdown
+	InterrogateMC(0x493D);	// Set max dwell = 16ms and enable soft shutdown
 }
 
 
@@ -93,6 +93,9 @@ void SPIAllStatus() {
 		ESerial.println();
 	}
 	else 
+	{
+		ESerial.println(F("no faults"));
+	}
 		return;
 	
 	if (ignition_reg)

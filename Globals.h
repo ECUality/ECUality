@@ -61,8 +61,9 @@ Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
 
-Parameter low_speed_dwell("lsd", 250, 2500);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
+Parameter low_speed_dwell("lsd", 250, 5000);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
 Parameter hi_speed_dwell("hsd", 250, 2500);
+//Parameter min_cranking_rpm("mrp, ")
 
 void NameParams() {
 	// We need this step to be separate from the constructor only because the F() macro has to live inside a function.  
