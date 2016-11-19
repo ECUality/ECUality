@@ -23,8 +23,8 @@ uint8_t n_tasks;
 uint8_t i_autoreport; 
 
 // sensor input variables
-int air_flow, rpm, o2, air_temp, coolant_temp, oil_pressure;
-unsigned int inj_duration;
+int air_flow, o2, air_temp, coolant_temp, oil_pressure;
+unsigned int inj_duration, rpm;
 
 // Ignition variables
 unsigned int tach_period, old_tach_period, g_dwell;	
@@ -63,6 +63,7 @@ FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 
 Parameter low_speed_dwell("lsd", 250, 5000);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
 Parameter hi_speed_dwell("hsd", 250, 2500);
+Parameter starting_dwell("std", 250, 9000);			// dwell during starting
 //Parameter min_cranking_rpm("mrp, ")
 
 void NameParams() {
@@ -76,6 +77,7 @@ void NameParams() {
 	idle_offset.setName(F("idle_offset"));
 	low_speed_dwell.setName(F("ls_dwell"));
 	hi_speed_dwell.setName(F("hs_dwell"));
+	starting_dwell.setName(F("start_dwell"));
 
 
 	// Scales

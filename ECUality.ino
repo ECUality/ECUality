@@ -217,7 +217,7 @@ void readOilPressure()
 }
 void calcRPMandDwell()
 {
-	static int old_rpm = 0;
+	static unsigned int old_rpm = 0;
 	// (60e6 us/min) / (4 us/tic)				= 15e6 tics/min
 	// (tics/min) / (tach_period tics/pulse)	= pulses/min
 	// pulses/min * (1 rev/pulse)				= 15e6 / tach_period 
@@ -248,18 +248,27 @@ void calcRPMandDwell()
 	////// DWELL SECTION ////////////
 	// we only start charging coil if RPM is at least 200
 
-	if (rpm > MIN_IGN_RPM)
-		TIMSK4 |= _BV(OCIE4A);	// enable the ignition system.
+	if ((rpm > MIN_IGN_RPM) && (abs(rpm_d) < (rpm >> 2)))
+	{
+		// clear the output compare flag. 
+		TIFR4 &= ~_BV(OCF4A);	// clear the output compare flag. 
+		TIMSK4 |= _BV(OCIE4A);	// enable the out.comp. interrupt (ignition system)
+		digitalWrite(drv_en_pin, LOW);
+	}
 	else
-		TIMSK4 &= ~_BV(OCIE4A);		// disable ignition system. 
+	{
+		// disable ignition system. 
+		TIMSK4 &= ~_BV(OCIE4A);			// this prevents the coil pin from being set
+		digitalWrite(drv_en_pin, HIGH);	// this starts a soft-shutdown
+		digitalWrite(coil1_pin, LOW);	// turn off the coil. 
+	}
 
 	if (rpm < 800)
 	{
-		g_dwell = low_speed_dwell.value;	//this is a longer dwell
 		if (digitalRead(cranking_pin))
-		{
-			g_dwell += 1500;		// and extra 6ms while starter is cranking
-		}
+			g_dwell = starting_dwell.value;		// High dwell during cranking
+		else
+			g_dwell = low_speed_dwell.value;	//this is a longer dwell
 	}
 	else
 		g_dwell = hi_speed_dwell.value;
@@ -337,11 +346,11 @@ void updateRunCondition()
 	char idl_or_full = !digitalRead(idl_full_pin);
 	run_condition = 0;
 
-	if ((rpm < RUNNING_RPM) || !digitalRead(fuel_pin))
-		run_condition |= _BV(NOT_RUNNING);
-
-	else if (digitalRead(cranking_pin))
+	if (digitalRead(cranking_pin))
 		run_condition |= _BV(CRANKING);
+
+	else if ((rpm < RUNNING_RPM) || !digitalRead(fuel_pin))
+		run_condition |= _BV(NOT_RUNNING); 
 
 	else if (idl_or_full && (air_flow < air_thresh.value))
 		//(air_flow < coasting_air.interpolate(rpm))
@@ -489,8 +498,11 @@ ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A.
 }
 ISR(TIMER4_OVF_vect)
 {
-	tach_period = 0xFFFF;	// this makes it obvious the engine is not running
-	rpm = 0;
+	tach_period = 0xFFFF;	// this makes it obvious the engine is not running 
+							// rpm will be 7500,000 / 65,535 = 114 rpm
+
+	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
+
 }
 void isrCoilNominalCurrent() {
 	coil_current_flag = 1;

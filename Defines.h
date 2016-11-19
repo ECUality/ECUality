@@ -22,4 +22,4 @@
 // 60e6 / 4 / 2 = 75e5 timer tics/pulse * rpm 
 // so rpm = 75e5/(spark_period)
 #define TICS_PER_TACH 7500000
-#define MIN_IGN_RPM  200
+#define MIN_IGN_RPM  160

@@ -38,11 +38,13 @@ uint16_t InterrogateMC(uint16_t spi_send) {
 
 void SPIInitSparkMode() {
 	// 0x493D = 
-	// <11-8> max dwell = 32ms, max dwell protect enabled, 
+	// <11-8> max dwell = 64ms, max dwell protect enabled, 
 	// <7-6> overlap dwell disabled, feedback gain for 40mohm, 
 	// <5-4> soft shutdown enabled, open 2nd clamp enabled, 
 	// <3-0> open 2nd fault = 100us, end spark threshold = Vpwr + 5.5V. 
-	InterrogateMC(0x493D);	// Set max dwell = 16ms and enable soft shutdown
+	InterrogateMC(0x4B3D);	// Set max dwell = 16ms and enable soft shutdown
+	_delay_us(1000);
+	InterrogateMC(0x6484);	// set Max current to 10A, Nominal current to 4.0A.
 }
 
 
@@ -51,7 +53,7 @@ void SPIAllStatus() {
 
 	all_stat_reg = InterrogateMC(0x0A00);	// read all-status register
 	ignition_reg = InterrogateMC(0x0A40);	// read ignition status register
-	out12_reg = InterrogateMC(0x0A10);		// read injector-drove 1,2 status 
+	out12_reg = InterrogateMC(0x0A10);		// read injector-drive 1,2 status 
 	out34_reg = InterrogateMC(0x0A20);		// read injector-drive 3,4 status
 
 	if (all_stat_reg)
@@ -95,8 +97,8 @@ void SPIAllStatus() {
 	else 
 	{
 		ESerial.println(F("no faults"));
-	}
 		return;
+	}
 	
 	if (ignition_reg)
 	{
@@ -170,6 +172,11 @@ void SPIAllStatus() {
 		if (out12_reg & (1 << 0))
 			ESerial.print(F("0OnOpen "));
 
+		if (digitalRead(coil1_pin))
+		{
+			ESerial.println();
+			ESerial.print(F("Coil Pin High"));
+		}
 		ESerial.println();
 	}
 }

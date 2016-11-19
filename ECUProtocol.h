@@ -212,7 +212,7 @@ void enableDrive()
 	{
 		digitalWrite(fuel_pin, HIGH);
 		digitalWrite(drv_en_pin, LOW);
-		//attachInterrupt(4, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+		//attachInterrupt(4, isrTachFallingEdge, RISING);	// interrupt 4 maps to pin 19. 
 		interjectln(F("Armed."));
 	}
 	else
