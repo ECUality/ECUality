@@ -71,7 +71,8 @@ void setup()
 	//pinMode(13, OUTPUT);
 
 	inj_duration = 5;
-	tach_period = old_tach_period = 0;
+	tach_period_i = 0;
+	tach_period[tach_period_i] = old_tach_period = 0;
 	
 	Map::clear(&change_map);
 	good_ee_loads = loadData(NULL);		// load data from EE.
@@ -96,7 +97,7 @@ void setup()
 
 	// Configure Timer4 for measuring ignition dwell (using interrupt)
 	TCCR4A = 0;							// clear control register A 
-	TCCR4B = _BV(CS41) | _BV(CS40);		// start the timer at clk/64 prescale. 
+	TCCR4B = _BV(CS42) | _BV(CS40);		// start the timer at clk/1024 prescale. = 64us per tic. 
 
 	// enable timer overflow interrupt for non-running and slow-cranking issues
 	TIMSK4 |= _BV(TOIE4);	// this affects rpm calculation for low RPM
@@ -118,7 +119,7 @@ void setup()
 	// COM0B<1:0>	= 2 (10)	same as A.
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
 
-	attachInterrupt(tach_interrupt, isrTachFallingEdge, FALLING);	// interrupt 4 maps to pin 19. 
+	attachInterrupt(tach_interrupt, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
 	attachInterrupt(coil_current_interrupt, isrCoilNominalCurrent, RISING);	// interrupt 3 maps to pin 20. 
 
 	EEPROM_readAnything(ENABLE_ADDY, enable);
@@ -223,7 +224,7 @@ void calcRPMandDwell()
 	// pulses/min * (1 rev/pulse)				= 15e6 / tach_period 
 	// we're pulsing the injectors (and measuring) every other tach input pulse, so it's 1:1 with crankshaft. 
 	old_rpm = rpm;
-	rpm = TICS_PER_TACH / tach_period;
+	rpm = TICS_PER_TACH / tach_period[tach_period_i];
 	rpm_d = old_rpm - rpm;
 	avg_rpm.addSample(rpm);
 	
@@ -447,7 +448,7 @@ ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt
 							
 					
 }
-void isrTachFallingEdge()
+void isrTachRisingEdge()
 {
 	// Spark!  (time-sensitive, hence placement at top of this ISR)
 	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
@@ -474,14 +475,18 @@ void isrTachFallingEdge()
 		--pulse_divider;
 
 	// Finish the ignition operations here.  (Dwell is not as time-sensitive)
-	old_tach_period = tach_period;
+	old_tach_period = tach_period[tach_period_i];
 	// spark period measured separately to handle low-rpm and update every pulse. 
-	tach_period = TCNT4;
+	if (++tach_period_i >= TACH_PERIOD_N)
+		tach_period_i = 0;
+	tach_period[tach_period_i] = TCNT4;
+	
+
 	// set a timer for when we begin dwell again
 	TCNT4 = 0;
 	// here we set the on-time for charging the coil (dwell) to be 
 	// dwell.value * 4us before the next predicted tach rising edge.
-	OCR4A = tach_period - g_dwell;
+	OCR4A = tach_period[tach_period_i] - g_dwell;
 	
 
 }
@@ -498,8 +503,10 @@ ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A.
 }
 ISR(TIMER4_OVF_vect)
 {
-	tach_period = 0xFFFF;	// this makes it obvious the engine is not running 
-							// rpm will be 7500,000 / 65,535 = 114 rpm
+	/*if (++tach_period_i >= TACH_PERIOD_N)
+		tach_period_i = 0;*/
+	tach_period[tach_period_i] = 65000;	// this makes it obvious the engine is not running 
+							// rpm will be 468,750 / 65,000 = 7 rpm
 
 	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
 

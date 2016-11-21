@@ -368,6 +368,20 @@ const char CheckCoilCurrent(void* obj_ptr) {
 	ESerial.println(current);
 }
 
+const char ReportTachPeriod(void* obj_ptr) {
+
+	ESerial.print(F("tach_period: "));
+	for (int i = 0; i < TACH_PERIOD_N; i++)
+	{
+		ESerial.print(tach_period[i]);
+		tach_period[i] = 0xFFFF;
+		ESerial.print(" ");
+		if (i == (TACH_PERIOD_N >> 1))
+			ESerial.println();
+	}
+	ESerial.println();
+	
+}
 
 void initProtocol()
 {
@@ -421,6 +435,8 @@ void initProtocol()
 	
 	ESerial.addCommand(F("spia"), CheckStatusMC33810, NULL);	// - 34
 	ESerial.addCommand(F("curr"), CheckCoilCurrent, NULL);
+
+	ESerial.addCommand(F("tach"), ReportTachPeriod, NULL);
 
 	//Currently max is 50
 }

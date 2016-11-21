@@ -27,9 +27,13 @@ int air_flow, o2, air_temp, coolant_temp, oil_pressure;
 unsigned int inj_duration, rpm;
 
 // Ignition variables
-unsigned int tach_period, old_tach_period, g_dwell;	
+unsigned int old_tach_period, g_dwell;	
 unsigned char coil_current_flag;
 MovingAverage avg_rpm(4);
+
+#define TACH_PERIOD_N 64
+unsigned char tach_period_i;
+unsigned int tach_period[TACH_PERIOD_N];
 
 // variables that capture dynamic aspects of sensor input
 int air_flow_d, air_flow_snap, o2_d, rpm_d;
@@ -61,9 +65,9 @@ Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
 
-Parameter low_speed_dwell("lsd", 250, 5000);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
-Parameter hi_speed_dwell("hsd", 250, 2500);
-Parameter starting_dwell("std", 250, 9000);			// dwell during starting
+Parameter low_speed_dwell("lsd", 16, 800);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
+Parameter hi_speed_dwell("hsd", 16, 156);
+Parameter starting_dwell("std", 16, 800);			// dwell during starting
 //Parameter min_cranking_rpm("mrp, ")
 
 void NameParams() {
