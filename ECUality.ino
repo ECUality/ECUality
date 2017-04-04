@@ -17,6 +17,11 @@
 #include <EEPROM.h>
 #include <SPI.h>
 
+// Data: 60e6 us/min   16us/timer tic (256 prescale, 16Mhz)   2 tach pulses per rev.
+// 60e6 / 16 / 2 = 468750 timer tics/pulse * rpm 
+// so rpm = 1875000/(spark_period)
+
+#define TICS_PER_TACH 1875000
 
 void setup()
 {
@@ -97,7 +102,8 @@ void setup()
 
 	// Configure Timer4 for measuring ignition dwell (using interrupt)
 	TCCR4A = 0;							// clear control register A 
-	TCCR4B = _BV(CS42) | _BV(CS40);		// start the timer at clk/1024 prescale. = 64us per tic. 
+	TCCR4B = _BV(CS42);					// start the timer at clk/256 prescale. = 16us per tic. 
+	//TCCR4B = _BV(CS42) | _BV(CS40);		// start the timer at clk/1024 prescale. = 64us per tic. 
 
 	// enable timer overflow interrupt for non-running and slow-cranking issues
 	TIMSK4 |= _BV(TOIE4);	// this affects rpm calculation for low RPM
