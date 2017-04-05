@@ -37,14 +37,28 @@ uint16_t InterrogateMC(uint16_t spi_send) {
 }
 
 void SPIInitSparkMode() {
-	// 0x493D = 
-	// <11-8> max dwell = 64ms, max dwell protect enabled, 
-	// <7-6> overlap dwell disabled, feedback gain for 40mohm, 
-	// <5-4> soft shutdown enabled, open 2nd clamp enabled, 
-	// <3-0> open 2nd fault = 100us, end spark threshold = Vpwr + 5.5V. 
-	InterrogateMC(0x4B3D);	// Set max dwell = 16ms and enable soft shutdown
+
+	// 0x493D = 0100 1001 0011 1101
+	//0100 (spark cmd)  
+	//100 1 (max dwell = 32ms, max dwell protect enabled)  
+	//0 0 1 1 (overlap dwell disabled, gain for 40mohm, soft shutdown enabled, open secondary clamp enabled) 
+	//11 01 (open 2nd fault = 100us, end spark threshold = Vpwr + 5.5V) 
+
+	// 0x4B3D = 0100 1011 0011 1101
+	//0100 (spark cmd)  
+	//101 1 (max dwell = 64ms, max dwell protect enabled)  
+	//0 0 1 1 (overlap dwell disabled, gain for 40mohm, soft shutdown enabled, open secondary clamp enabled) 
+	//11 01 (open 2nd fault = 100us, end spark threshold = Vpwr + 5.5V) 
+
+	InterrogateMC(0x493D);	// Set max dwell = 32ms and enable soft shutdown
 	_delay_us(1000);
-	InterrogateMC(0x6484);	// set Max current to 10A, Nominal current to 4.0A.
+
+	// 0x6A84 = 0110 1010 1000 0100
+	//0110 (DAC cmd)  
+	//1010 (Max current = 16A )  
+	//100 (overlap setting: 50% ) 
+	//00100 (Nominal current = 4A) 
+	InterrogateMC(0x6A84);	// set Max current to 10A, Nominal current to 4.0A.
 }
 
 
@@ -182,9 +196,15 @@ void SPIAllStatus() {
 }
 
 void SPISetNOMI(uint8_t nomi) {
-	uint16_t data = 0x6880;
+	// start with 0110 0000 1000 0000  putting command (6), MaxI = 16A, and overlap setting (50%) in place. 
+	//uint16_t data = 0x6080;  // for future feature when updating MaxI
+	uint16_t data = 0x6A80;
 
-	nomi &= 0x001F;
+
+	nomi &= 0x001F; // toss all bits but lowest 5
+	//maxi &= 0x000F; // toss all bits but lowest 4
+	//maxi <<= 8;		// rotate maxi to bits 11-8
 	data += nomi;
+	//data += maxi;
 	InterrogateMC(data);
 }

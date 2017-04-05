@@ -5,16 +5,28 @@
 # cranking duration nominal 
 # choke scale (extra injector duration vs coolant temperature) 
 
-Wiof 1
-Wglo -171
-Wcrp 1500
-Wirp 1400
-Wath 90
-Wcld 175
-Wcra 1640
+Wiof idle_offset: -100
+Wglo global_offset: -171
+Wcrp coasting_rpm: 1500
+Wirp idling_rpm: 1400
+Wath air_thresh: 90
+Wcld cold_threshold: 170
+Wcra cranking_dur: 1640
+Wout O2_upper: 570
+Wolt O2_lower: 350
+Wtsz tweak_step_sz: 4
+Wlsl loc_sum_limit: 300
+
+Wowi time_warming_o2: 20
+Wewi time_eng_warm: 60
+Weri time_glo_only: 60
+Wlsd ls_dwell: 180
+Whsd hs_dwell: 160
+Wstd start_dwell: 200
+
 
 Wcho 5
-temp	180	120	60	10	-20
+temp	170	120	60	10	-20
 choke	0	170	650	850	1000
 
 Wtem 12
@@ -23,7 +35,7 @@ Wtem 12
 
 Wisc 2
 500	1300
-1000	600
+1200	570
 
 Wgri 8	
 air:	220	180	140	100	80	60	40	20	
@@ -48,19 +60,6 @@ Wloc 8
  	0	0	82	26	-28	294	353	0	
  	0	0	-1	-2	-4	105	204	1	
  	0	0	0	0	0	10	49	1	
-
-
-## O2 lower thresh	/  o2 upper thresh	/  O2 warming time 
-## local sum limit	/  tweak size		/  engine warming time
-
-Wout 570
-Wolt 350
-Wtsz 4
-Wlsl 300
-
-Wowi 20
-Wewi 30
-Weri 30
 
 save
 Sloc

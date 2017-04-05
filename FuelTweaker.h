@@ -14,7 +14,6 @@
 
 class FuelTweaker
 {
-	uint8_t lockout;
 	uint8_t o2_open;
 	unsigned int idle_adjustment;
 	unsigned int time_warming_o2; 
@@ -43,6 +42,7 @@ class FuelTweaker
 	
 public:
 	uint8_t mode;
+	uint8_t lockout;
 
 	// Adding a parameter happsne: 
 	// 1) here  2) constructor initialization list  3) constructor body for initial value  4) load func. 5) save func. 
@@ -76,7 +76,6 @@ public:
 	static const char reportParams(void* obj_ptr);
 	static const char load(void* obj_ptr);
 	static const char save(void* obj_ptr);
-	static const char lock(void* obj_ptr);
 
 };
 

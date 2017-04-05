@@ -17,6 +17,7 @@
 #define TWEAK_FREQ_MS 200
 #define TWEAKS_PER_SEC 5
 #define ENABLE_ADDY 3001
+#define TWEAK_LOCK_ADDY 3002
 
 
 #define MIN_IGN_RPM  120

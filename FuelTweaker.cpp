@@ -290,13 +290,3 @@ const char FuelTweaker::reportParams(void* obj_ptr)
 
 
 }
-
-const char FuelTweaker::lock(void* obj_ptr)
-{
-	FuelTweaker* self = (FuelTweaker *)obj_ptr;
-	self->lockout = !self->lockout;
-	if (self->lockout)
-		ESerial.println(F("tweaks locked"));
-	else
-		ESerial.println(F("tweaks unlocked"));
-}

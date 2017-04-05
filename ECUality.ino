@@ -31,7 +31,7 @@ void setup()
 	//Serial.begin(115200);
 
 	InitSPI();
-	
+
 
 	NameParams();
 
@@ -67,23 +67,22 @@ void setup()
 	setPinModes(inputs, INPUT);
 	setPinModes(outputs, OUTPUT);
 	pinMode(40, INPUT);		// the other hooked-up inj1_pin. 
-	
+
 	digitalWrite(cs_inj_pin, HIGH);
 	digitalWrite(cs_knock_pin, HIGH);
 	digitalWrite(cs_sd_pin, HIGH);
 
-	//pinMode(coil1_pin,)
-	//pinMode(13, OUTPUT);
+
 
 	inj_duration = 5;
 	tach_period_i = 0;
 	tach_period[tach_period_i] = old_tach_period = 0;
-	
+
 	Map::clear(&change_map);
 	good_ee_loads = loadData(NULL);		// load data from EE.
 
 	initProtocol();						// set up protocol. 
-	
+
 	// TIMERS
 	// Configure Timer1 for task scheduling.  Hits ICR1 every 2ms and runs interrupt. 
 	TCCR1A = 0;				// disables all output compare modules and clears WGM1<0-1> 
@@ -112,7 +111,7 @@ void setup()
 	// setting or clearing OCIE4A, the output compare interrupt enable bit. 
 	// The Output compare interrupt is what starts the dwells.
 	// It is important for engine-start that we NOT set OCIE4A here. 
-	
+
 
 	// disable the timer 0 interrupt.  This breaks millis() but prevents interference with pulse timing.
 	// note: ECUSerial.cpp uses millis() to time communication-stream events.  
@@ -133,6 +132,10 @@ void setup()
 		enableDrive();
 	else
 		ESerial.println(F("fuck off asshole"));		// said to either my forgetful self, or a van-thief. 
+
+	EEPROM_readAnything(TWEAK_LOCK_ADDY, boss.lockout);
+	if (boss.lockout)
+		ESerial.println(F("tweaks locked"));		// lock bit set, no tuning. 
 
 	auto_stat = 1; // turn on auto-reporting. 
 

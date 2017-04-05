@@ -65,8 +65,8 @@ Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
 
-Parameter low_speed_dwell("lsd", 16, 200);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
-Parameter hi_speed_dwell("hsd", 16, 160);
+Parameter low_speed_dwell("lsd", 16, 240);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
+Parameter hi_speed_dwell("hsd", 16, 200);
 Parameter starting_dwell("std", 16, 300);			// dwell during starting
 //Parameter min_cranking_rpm("mrp, ")
 

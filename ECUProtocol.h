@@ -237,6 +237,19 @@ const char toggleEnable(void* obj_ptr) {
 		EEPROM_writeAnything(ENABLE_ADDY, 1);
 	}
 }
+
+const char lockTweaks(void* obj_ptr) {
+	boss.lockout = !boss.lockout;
+
+	// save the state (locked or unlocked) to eeprom so the vehicle wakes in same state. 
+	EEPROM_writeAnything(TWEAK_LOCK_ADDY, boss.lockout);
+
+	if (boss.lockout)
+		ESerial.println(F("tweaks locked"));
+	else
+		ESerial.println(F("tweaks unlocked"));
+}
+
 const char memory(void* obj_ptr)
 {
 	extern int __heap_start, *__brkval;
@@ -368,6 +381,25 @@ const char CheckCoilCurrent(void* obj_ptr) {
 	ESerial.println(current);
 }
 
+const char SetNomI(void* obj_ptr) {
+	// here we set the nominal compare current on the MC33810 progressively higher
+	// until we don't see it tripping for a spark cycle. 
+	int nomi;
+	float current = 3;
+
+	ESerial.timedParseInt(nomi);
+
+	nomi = ((nomi > 30) ? 30 : nomi);
+	nomi = ((nomi < 0) ? 0 : nomi);
+
+	current = 3 + (0.25 * nomi);
+	
+	ESerial.print(F("Inom set to "));
+	ESerial.println(current);
+
+	SPISetNOMI(nomi);
+}
+
 const char ReportTachPeriod(void* obj_ptr) {
 
 	ESerial.print(F("tach_period: "));
@@ -394,7 +426,7 @@ void initProtocol()
 
 	ESerial.addCommand(F("arm"), toggleEnable, NULL);
 	ESerial.addCommand(F("auto"), setReportMode, NULL);
-	ESerial.addCommand(F("lock"), FuelTweaker::lock, &boss);
+	ESerial.addCommand(F("lock"), lockTweaks, NULL);
 	ESerial.addCommand(F("mode"), reportMode, NULL);			// 4
 
 	ESerial.addCommand(F("+"), increaseParameter, NULL);
@@ -435,6 +467,7 @@ void initProtocol()
 	
 	ESerial.addCommand(F("spia"), CheckStatusMC33810, NULL);	// - 34
 	ESerial.addCommand(F("curr"), CheckCoilCurrent, NULL);
+	ESerial.addCommand(F("nomi"), SetNomI, NULL);
 
 	ESerial.addCommand(F("tach"), ReportTachPeriod, NULL);
 
