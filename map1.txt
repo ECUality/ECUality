@@ -6,7 +6,7 @@
 # choke scale (extra injector duration vs coolant temperature) 
 
 Wiof idle_offset: -100
-Wglo global_offset: -171
+Wglo global_offset: 0
 Wcrp coasting_rpm: 1500
 Wirp idling_rpm: 1400
 Wath air_thresh: 90
@@ -14,8 +14,7 @@ Wcld cold_threshold: 170
 Wcra cranking_dur: 1640
 Wout O2_upper: 570
 Wolt O2_lower: 350
-Wtsz tweak_step_sz: 4
-Wlsl loc_sum_limit: 300
+Wtsz tweak_step_sz: 1
 
 Wowi time_warming_o2: 20
 Wewi time_eng_warm: 60
@@ -27,7 +26,7 @@ Wstd start_dwell: 200
 
 Wcho 5
 temp	170	120	60	10	-20
-choke	0	170	650	850	1000
+choke	0	170	700	900	1000
 
 Wtem 12
 563	454	356	278	208	157	116	88	66	52	41	32
@@ -56,10 +55,10 @@ Wloc 8
  	82	-53	-2	-247	112	-196	-197	-18	
  	63	120	76	-159	77	-73	-116	-24	
  	0	32	-89	-244	94	-119	-181	-5	
- 	0	16	275	-79	-177	258	626	-5	
- 	0	0	82	26	-28	294	353	0	
- 	0	0	-1	-2	-4	105	204	1	
- 	0	0	0	0	0	10	49	1	
+ 	0	16	275	-79	-177	-100	-100	-5	
+ 	0	0	82	26	-28	-100	-100	0	
+ 	0	0	-1	-2	-4	-50	-50	1	
+ 	0	0	0	0	0	0	0	1	
 
 save
 Sloc

@@ -49,8 +49,7 @@ public:
 
 	Parameter	o2_upper_thresh;		// the o2 value above which we begin to trim leaner. 
 	Parameter	o2_lower_thresh;		// the o2 value below which we begin to trim richer. 
-	Parameter	step_size;				// the size of single adjustments made during tuning
-	Parameter	local_sum_limit;		// limit on adjustment to the local map in one direction before altering global offset
+	Parameter	local_step_size;		// the size of local (not global) adjustments to the map made during tuning
 
 		
 	// times in seconds

@@ -38,7 +38,7 @@ map:
  	0	0	0	0	0	10	49	1	
 
 >>rbos
-o2_upper_thr: 570   o2_lower_thr: 390   step: 4   local_sum_limit: 300   rpm_hyst: 60   idle_backstep: 45
+o2_upper_thr: 570   o2_lower_thr: 390   step: 1   local_sum_limit: 300   rpm_hyst: 60   idle_backstep: 45
 time thresholds->  warming_o2: 20   warm: 30   running: 30   idle_adjust_freq: 100
 
 >>rcho

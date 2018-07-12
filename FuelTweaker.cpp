@@ -22,8 +22,7 @@ FuelTweaker::FuelTweaker(
 
 	o2_upper_thresh("out", 300, 1000),			// Internal Parameters
 	o2_lower_thresh("olt", 0, 700),
-	step_size("tsz", 0, 10),
-	local_sum_limit("lsl", 10, 300),	
+	local_step_size("tsz", 0, 8),
 
 	time_warming_o2_thresh("owi", 3, 90),
 	time_eng_warm_thresh("ewi", 10, 3600),
@@ -33,8 +32,7 @@ FuelTweaker::FuelTweaker(
 {
 	o2_upper_thresh.setName(F("O2_upper"));
 	o2_lower_thresh.setName(F("O2_lower"));
-	step_size.setName(F("tweak_step_sz"));
-	local_sum_limit.setName(F("loc_sum_limit"));
+	local_step_size.setName(F("local_step_sz"));
 	time_warming_o2_thresh.setName(F("time_warming_o2"));
 	time_eng_warm_thresh.setName(F("time_eng_warm"));
 	time_running_thresh.setName(F("time_glo_only"));
@@ -45,9 +43,7 @@ FuelTweaker::FuelTweaker(
 	o2_lower_thresh.value = 370;
 
 	//  the size of tweak steps 
-	step_size.value = 0;		// start with it zeroed, so there is no tweaking until loaded from EE. 
-
-	local_sum_limit.value = 40;		// the limit to the sum of the local offset map (governs local vs global changes) 
+	local_step_size.value = 0;		// start with it zeroed, so there is no tweaking until loaded from EE. 
 
 	//  time from when engine stops coasting until it starts tweaking again.  
 	time_warming_o2_thresh.value = 20;	// (20 sec) * (1000 ms/s) / (ms/tic)
@@ -84,18 +80,16 @@ void FuelTweaker::tweakGlobalvO2()
 void FuelTweaker::tweakLocalAndGlobalvO2()
 {
 	mode = LOCAL_MODE;
-	static uint8_t local_step_size;
-	local_step_size = step_size.value;
 
 	if (o2 > o2_upper_thresh.value)					// rich:  reduce offsets
 	{
 		global_correction--;
-		addToLocal(-local_step_size);
+		addToLocal(-local_step_size.value);
 	}
 	else if (o2 < o2_lower_thresh.value)			// lean:  increase offsets
 	{
 		global_correction++;
-		addToLocal(local_step_size);
+		addToLocal(local_step_size.value);
 	}
 }
 
@@ -174,11 +168,8 @@ const char FuelTweaker::reportParams(void* obj_ptr)
 	ESerial.print(F("   o2_lower_thr: "));
 	ESerial.print(self->o2_lower_thresh.value);
 
-	ESerial.print(F("   step: "));
-	ESerial.print(self->step_size.value);
-
-	ESerial.print(F("   local_sum_limit: "));
-	ESerial.print(self->local_sum_limit.value);
+	ESerial.print(F("   local_step: "));
+	ESerial.print(self->local_step_size.value);
 
 	ESerial.println();
 
