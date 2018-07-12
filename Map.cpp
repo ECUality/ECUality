@@ -208,8 +208,9 @@ void Map::localOffset(unsigned int rpm, unsigned int air, long offset)
 	// here, we apply an offset to the map correction in the locale of our current operation (air_flow and rpm) 
 	char i_air, i_rpm;
 	int D_rpm, D_air, d_rpm_lowside, d_air_rightside;
-	long dz_r0, dz_r1;
+	//long dz_r0, dz_r1;
 	int dz_r0a0, dz_r0a1, dz_r1a0, dz_r1a1;
+	dz_r0a0 = dz_r0a1 = dz_r1a0 = dz_r1a1 = 0;
 
 	// find the location on the map.
 	i_air = findIndexJustAbove(scale->x, air, n);
@@ -224,41 +225,97 @@ void Map::localOffset(unsigned int rpm, unsigned int air, long offset)
 	D_rpm = scale->y[i_rpm - 1] - scale->y[i_rpm];	// positive
 	D_air = scale->x[i_air - 1] - scale->x[i_air];	// positive
 
-	d_rpm_lowside = rpm - scale->y[i_rpm];			// delta above lower neighbors
+	d_rpm_lowside = rpm - scale->y[i_rpm];			// delta above lower neighbors. (indices [0, 0] in upper left corner. )
 	d_air_rightside = air - scale->x[i_air];		// delta to left of neighbors. 
 
-	if ((d_rpm_lowside * 2) > D_rpm)		// closer to the upper neighbors.  Use lower delta for calculations.
+	// below, a region value is calculated that tells us where we're running relative to the four closest vertices on the map.
+	// basically, it counts up from zero starting in the lower right (near r1a1) and rounting right to left, then up.  so: 
+	// (r1a1) 8 7 6 (r1a0)
+	//        5 4 3
+	// (r0a1) 2 1 0 (r0a0)
+
+	uint8_t region = 3 * (d_rpm_lowside > (D_rpm >> 2)); 
+	region += 3 * (d_rpm_lowside > ((D_rpm*3) >> 2));
+	region += (d_air_rightside > (D_air >> 2));
+	region += (d_air_rightside > ((D_air * 3) >> 2));
+
+	// based on the region, we divvy up the change based on our present operating location.  
+	// Visually, here's how it works: 
+	// (0) - - - (0)	(0) - - - (0)	(0) - - - (2)	(1) - - - (1)
+	//     - - -            - - -		    - - x		    - x -    
+	// (0) - - x (4)	(2) - x - (2)	(0) - - - (2)	(1) - - - (1)
+	switch (region)
 	{
-		dz_r0 = (offset * d_rpm_lowside) / D_rpm;
-		dz_r1 = offset - dz_r0;
-	}
-	else									// closer to the lower neighbors.  Use upper delta for calculations.
-	{
-		dz_r1 = (offset * (D_rpm - d_rpm_lowside)) / D_rpm;
-		dz_r0 = offset - dz_r1;
+	case 0: 
+		dz_r1a1 = 4;
+		break;
+	case 1:
+		dz_r1a1 = 2;
+		dz_r1a0 = 2;
+		break;
+	case 2:
+		dz_r1a0 = 4;
+		break;
+	case 3:
+		dz_r1a1 = 2;
+		dz_r0a1 = 2;
+		break;
+	case 4:
+		dz_r1a1 = 1;
+		dz_r1a0 = 1;
+		dz_r0a1 = 1;
+		dz_r0a0 = 1;
+		break;
+	case 5:
+		dz_r1a0 = 2;
+		dz_r0a0 = 2;
+		break;
+	case 6:
+		dz_r0a1 = 4;
+		break;
+	case 7:
+		dz_r0a1 = 2;
+		dz_r0a0 = 2;
+		break;
+	case 8:
+		dz_r0a0 = 4;
+		break;
+	default:
+		break;
 	}
 
-	if ((d_air_rightside * 2) > D_air)		// closer to the left neighbors, use right side deltas (larger) 
-	{
-		dz_r0a0 = (dz_r0 * d_air_rightside) / D_air;
-		dz_r0a1 = dz_r0 - dz_r0a0;
+	//if ((d_rpm_lowside * 2) > D_rpm)		// closer to the upper neighbors.  Use lower delta for calculations.
+	//{
+	//	dz_r0 = (offset * d_rpm_lowside) / D_rpm;
+	//	dz_r1 = offset - dz_r0;
+	//}
+	//else									// closer to the lower neighbors.  Use upper delta for calculations.
+	//{
+	//	dz_r1 = (offset * (D_rpm - d_rpm_lowside)) / D_rpm;
+	//	dz_r0 = offset - dz_r1;
+	//}
 
-		dz_r1a0 = (dz_r1 * d_air_rightside) / D_air;
-		dz_r1a1 = dz_r1 - dz_r1a0;
-	}
-	else									// closer to right neighbors, use left side deltas (larger) 
-	{
-		dz_r0a1 = (dz_r0 * (D_air - d_air_rightside)) / D_air;
-		dz_r0a0 = dz_r0 - dz_r0a1;
+	//if ((d_air_rightside * 2) > D_air)		// closer to the left neighbors, use right side deltas (larger) 
+	//{
+	//	dz_r0a0 = (dz_r0 * d_air_rightside) / D_air;
+	//	dz_r0a1 = dz_r0 - dz_r0a0;
 
-		dz_r1a1 = (dz_r1 * (D_air - d_air_rightside)) / D_air;
-		dz_r1a0 = dz_r1 - dz_r1a1;
-	}
+	//	dz_r1a0 = (dz_r1 * d_air_rightside) / D_air;
+	//	dz_r1a1 = dz_r1 - dz_r1a0;
+	//}
+	//else									// closer to right neighbors, use left side deltas (larger) 
+	//{
+	//	dz_r0a1 = (dz_r0 * (D_air - d_air_rightside)) / D_air;
+	//	dz_r0a0 = dz_r0 - dz_r0a1;
 
-	offsetZPoint(i_rpm - 1, i_air - 1, dz_r0a0);
-	offsetZPoint(i_rpm - 1, i_air, dz_r0a1);
-	offsetZPoint(i_rpm, i_air - 1, dz_r1a0);
-	offsetZPoint(i_rpm, i_air, dz_r1a1);
+	//	dz_r1a1 = (dz_r1 * (D_air - d_air_rightside)) / D_air;
+	//	dz_r1a0 = dz_r1 - dz_r1a1;
+	//}
+
+	offsetZPoint(i_rpm - 1, i_air - 1, dz_r0a0*offset);
+	offsetZPoint(i_rpm - 1, i_air, dz_r0a1*offset);
+	offsetZPoint(i_rpm, i_air - 1, dz_r1a0*offset);
+	offsetZPoint(i_rpm, i_air, dz_r1a1*offset);
 }
 
 void Map::offsetZPoint(char i_rpm, char i_air, int offset)

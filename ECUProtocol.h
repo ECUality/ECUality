@@ -122,7 +122,7 @@ const char reportStatus(void* obj_ptr)
 
 	case 2:
 		ESerial.print(F("glo "));
-		ESerial.print(global_offset.value);
+		ESerial.print(global_correction.value);
 		ESerial.print(F(" loc "));
 		ESerial.println(offset_map.interpolate(rpm, air_flow, NULL));
 		break;
@@ -463,7 +463,7 @@ void initProtocol()
 
 	ESerial.addCommand(F("rchg"), Map::read, &change_map);
 	ESerial.addCommand(F("Cchg"), Map::clear, &change_map);
-	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_offset);	// - 33  
+	ESerial.addCommand(F("Cglo"), Parameter::clear, &global_correction);	// - 33  
 	
 	ESerial.addCommand(F("spia"), CheckStatusMC33810, NULL);	// - 34
 	ESerial.addCommand(F("curr"), CheckCoilCurrent, NULL);

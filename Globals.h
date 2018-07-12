@@ -47,7 +47,10 @@ unsigned int n_rpm_hi_faults, n_rpm_lo_faults, n_air_faults;
 // EE-Backed Parameters //////////////////////////////////
 
 Parameter idle_offset("iof", -1000, 1000);			// Just like global offset, but only used during idle conditions
-Parameter global_offset("glo", -1000, 1000);
+
+Parameter global_correction("glo", -50, 50);		// a 1/256 correction that scales with pre-corrected injector duration (acts as a "percentage") 
+// limited to be +-50/256 ~ approximately +-20%.  
+
 Parameter coasting_rpm("crp", 800, 2500);
 Parameter idling_rpm("irp", 400, 2200);
 Parameter air_thresh("ath", 50, 125);
@@ -63,7 +66,7 @@ Map change_map("change_map", "chg", &air_rpm_scale, 8, -1500, 1500);	// map that
 Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur at idle.  Higher dur at lower RPM. 
 
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
-	global_offset.value, offset_map, change_map);				// presently contains 7 parameters
+	global_correction.value, offset_map, change_map);				// presently contains 7 parameters
 
 Parameter low_speed_dwell("lsd", 16, 240);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
 Parameter hi_speed_dwell("hsd", 16, 200);
@@ -72,7 +75,7 @@ Parameter starting_dwell("std", 16, 300);			// dwell during starting
 
 void NameParams() {
 	// We need this step to be separate from the constructor only because the F() macro has to live inside a function.  
-	global_offset.setName(F("global_offset"));
+	global_correction.setName(F("global_corr"));
 	coasting_rpm.setName(F("coasting_rpm"));
 	idling_rpm.setName(F("idling_rpm"));
 	air_thresh.setName(F("air_thresh"));

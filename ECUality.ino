@@ -255,9 +255,7 @@ void calcRPMandDwell()
 		}
 	}
 	
-	////// DWELL SECTION ////////////
-	// we only start charging coil if RPM is at least 200
-
+	// DWELL: we only start charging coil if RPM is at least 200
 	if ((rpm > MIN_IGN_RPM) && (abs(rpm_d) < (rpm >> 2)))
 	{
 		// clear the output compare flag. 
@@ -288,7 +286,7 @@ void calcRPMandDwell()
 void calcInjDuration()
 {
 	static unsigned int new_inj_duration;
-	static int accel_offset, choke_offset, air_temp_offset;
+	static int accel_offset, choke_offset, air_temp_offset, global_offset;
 
 	if (digitalRead(cranking_pin))
 	{
@@ -297,7 +295,7 @@ void calcInjDuration()
 		return;
 	}
 
-	if (run_condition & _BV(IDLING))
+	if (run_condition & _BV(IDLING))	// only consider cold engine enrichment for idle.  No global correction. 
 	{
 		new_inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
 		inj_duration = (new_inj_duration + adjustForColdEngine(new_inj_duration, coolant_temp));
@@ -317,8 +315,9 @@ void calcInjDuration()
 	accel_offset = adjustForAccel(air_flow);		// these should not be order dependent.  
 	choke_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
 	air_temp_offset = adjustForAirTemp(new_inj_duration, air_temp);
+	global_offset = (new_inj_duration >> 8)*global_correction.value;
 
-	new_inj_duration = new_inj_duration + accel_offset + choke_offset + air_temp_offset + global_offset.value;
+	new_inj_duration += accel_offset + choke_offset + air_temp_offset + global_offset;
 
 	// output that shit
 	inj_duration = new_inj_duration;
@@ -420,8 +419,9 @@ void toggle(unsigned char pin)
 	digitalWrite(pin, digitalRead(pin) ^ 1);
 }
 
-// interrupt routines
-ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt 
+/*********************** interrupt routines ***********************/
+// Task scheduler interrupt 
+ISR( TIMER1_CAPT_vect )			
 {
 	sei();
 
@@ -457,6 +457,8 @@ ISR( TIMER1_CAPT_vect )			// this is the scheduler interrupt
 							
 					
 }
+
+// Injectors open and spark events
 void isrTachRisingEdge()
 {
 	// Spark!  (time-sensitive, hence placement at top of this ISR)
@@ -499,6 +501,8 @@ void isrTachRisingEdge()
 	
 
 }
+
+// Injectors close event
 ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A. 
 {
 	// set all injectors low (in same instruction)
@@ -506,10 +510,13 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 	PORTA &= ~0x08;				// 
 }
 
+// Begin dwell event
 ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A. 
 {
 	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
 }
+
+// De-energize ignition coil without spark (dwell exceeded maximum duration)
 ISR(TIMER4_OVF_vect)
 {
 	/*if (++tach_period_i >= TACH_PERIOD_N)
@@ -520,6 +527,8 @@ ISR(TIMER4_OVF_vect)
 	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
 
 }
+
+// Monitor nominal current pin on ignition driver 
 void isrCoilNominalCurrent() {
 	coil_current_flag = 1;
 }

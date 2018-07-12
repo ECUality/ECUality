@@ -8,12 +8,12 @@ FuelTweaker::FuelTweaker(
 	const int& air_flow_, 
 	const int& rpm_, 
 	const int& avg_rpm_,
-	const int& o2_, int& global_offset_, 
+	const int& o2_, int& global_correction_, 
 	Map& offset_map_, Map& change_map_) :
 
 	run_condition(run_condition_), o2(o2_),					// extermal references
 	air_flow(air_flow_), rpm(rpm_), avg_rpm(avg_rpm_),		// external refs. 
-	global_offset(global_offset_),							// external refs. 
+	global_correction(global_correction_),					// external refs. 
 	offset_map(offset_map_), change_map(change_map_),		// maps
 
 	lockout(0), mode(0), o2_open(0), idle_adjustment(0),	// internal chars
@@ -22,12 +22,12 @@ FuelTweaker::FuelTweaker(
 
 	o2_upper_thresh("out", 300, 1000),			// Internal Parameters
 	o2_lower_thresh("olt", 0, 700),
-	step_size("tsz", 0, 100),
+	step_size("tsz", 0, 10),
 	local_sum_limit("lsl", 10, 300),	
 
 	time_warming_o2_thresh("owi", 3, 90),
-	time_eng_warm_thresh("ewi", 30, 600),
-	time_running_thresh("eri", 30, 600),
+	time_eng_warm_thresh("ewi", 10, 3600),
+	time_running_thresh("eri", 10, 3600),
 	
 	ee_addy(EE_index.getNewAddress(50))
 {
@@ -65,87 +65,6 @@ FuelTweaker::~FuelTweaker()
 {
 }
 
-// void FuelTweaker::tweakvRPM() 
-/* {
-	// this is the overall tweaking mode.  Can be 0 (not tweaking), LOCAL_MODE, GLOBAL_MODE, IDLE_ADJ_MODE, IDLE_WAIT_MODE
-	// it is only set to IDLE_ADJ_MODE or IDLE_WAIT_MODE inside this function.  
-	if (mode != IDLE_ADJ_MODE )		
-	{
-		// if we just came down to idle from pulling or coasting, add 4 secs to timer. 
-		// so we don't happen to start adjusting while the rpm is still settling down. 
-		if (mode != IDLE_WAIT_MODE)				
-			time_waiting -= (4 * TWEAKS_PER_SEC);	
-
-		mode = IDLE_WAIT_MODE;				// record that we're now waiting. 
-		time_waiting++;
-		global_offset -= idle_adjustment;		// reverse changes from any interrupted previous adjustments. *IDLE or GLOBAL*
-		idle_adjustment = 0;				// and zero out the tracker to reflect this reversal.
-
-		// check if it's time to adjust. 
-		if (time_waiting < (idle_adjust_freq.value * TWEAKS_PER_SEC))	// it's not time yet. 
-			return;
-
-		else									// it's totally time. 
-		{
-			mode = IDLE_ADJ_MODE;
-			rpm_old = avg_rpm;
-		}
-	}
-	// here, we know we're in Adjust mode (if we weren't we would have hit the <return> above)
-
-	// check if RPM has decreased.  stop adjusting and (carburetor terminology) "turn the screw back 1/4 turn."
-	if (avg_rpm < (rpm_old - rpm_hyst.value))
-	{
-		mode = IDLE_WAIT_MODE;				// say we're now waiting.
-		time_waiting = 0;					// reset the waiting timer.
-
-		// the following 2 lines are from when we were doing local/global distribution of changes.
-		global_offset -= idle_adjustment;	// set global back then re-distribute adjustment to local and global. 
-		apportionLocalGlobal(idle_adjustment + idle_backstep.value);
-
-		idle_adjustment = 0;			// zero out the adjustment tracker (since we completed without interruption) 
-	}
-	else if (avg_rpm > rpm_old)			// if rpm goes up, compare to the new, higher rpm.  
-		rpm_old = avg_rpm; 
-
-	global_offset--;
-	idle_adjustment--;
-	
-		
-} */
-
-void FuelTweaker::apportionLocalGlobal(int adjustment)
-{
-	int max_local_adj = 0;
-
-	if (adjustment >= 0)
-	{
-		max_local_adj = local_sum_limit.value - local_sum;
-		
-		if (max_local_adj >= adjustment)
-			addToLocal(adjustment);
-
-		else
-		{
-			addToLocal(max_local_adj);
-			global_offset += (adjustment - max_local_adj);
-		}
-	}
-	else
-	{
-		max_local_adj = -local_sum_limit.value - local_sum;
-
-		if (max_local_adj <= adjustment)
-			addToLocal(adjustment);
-
-		else
-		{
-			addToLocal(max_local_adj);
-			global_offset += (adjustment - max_local_adj);
-		}
-	}
-}
-
 void FuelTweaker::addToLocal(int adjustment)
 {
 	offset_map.localOffset(rpm, air_flow, adjustment);
@@ -157,33 +76,26 @@ void FuelTweaker::tweakGlobalvO2()
 {
 	mode = GLOBAL_MODE;
 	if (o2 > o2_upper_thresh.value)
-		global_offset -= step_size.value;
+		global_correction--;		// here we make changes of only 1 because 1 on global_correction = 1/256 = .4% change
 	else if (o2 < o2_lower_thresh.value)
-		global_offset += step_size.value; 
+		global_correction++; 
 }
 
 void FuelTweaker::tweakLocalAndGlobalvO2()
 {
 	mode = LOCAL_MODE;
 	static uint8_t local_step_size;
-	local_step_size = step_size.value << 1;			// local step size = step size * 2; 
+	local_step_size = step_size.value;
 
 	if (o2 > o2_upper_thresh.value)					// rich:  reduce offsets
 	{
-		if (local_sum <= -local_sum_limit.value)
-			global_offset -= step_size.value;
-
-		else
-			addToLocal(-local_step_size);
-
+		global_correction--;
+		addToLocal(-local_step_size);
 	}
 	else if (o2 < o2_lower_thresh.value)			// lean:  increase offsets
 	{
-		if (local_sum >= local_sum_limit.value)
-			global_offset += step_size.value;
-
-		else
-			addToLocal(local_step_size);
+		global_correction++;
+		addToLocal(local_step_size);
 	}
 }
 
@@ -203,8 +115,6 @@ void FuelTweaker::tweak()
 		time_warming_o2 = 0;
 		//ESerial.print(F(";"));
 	}
-	if (run_condition & _BV(COASTING))
-		time_warming_o2 = 0;
 	
 
 	// Set the weak pullup resistor on the O2 sensor input. 
@@ -213,9 +123,9 @@ void FuelTweaker::tweak()
 
 	// determine mode. ////////////////////
 	
-	// if the engine isn't running on it's own fire, don't try to tweak. 
+	// if the engine isn't pulling  on it's own fire, don't try to tweak. 
 	if ( lockout || 
-		(run_condition & (_BV(NOT_RUNNING) | _BV(CRANKING) | _BV(COASTING))) || 
+		(run_condition & (_BV(NOT_RUNNING) | _BV(CRANKING) | _BV(COASTING) | _BV(IDLING))) || 
 		(time_running < (time_running_thresh.value * TWEAKS_PER_SEC))   )
 	{
 		mode = 0;	// the default, "not tuning" state.
@@ -223,13 +133,6 @@ void FuelTweaker::tweak()
 		return;
 	}
 
-	// if we're idling, tweak to maximize RPM
-	if (run_condition & _BV(IDLING))	
-	{
-		//tweakvRPM();	// XXX Turning this OFF  3-5-2016
-		mode = 0;		// indicate to other processes that we're not tweaking
-		return;
-	}
 	
 	if (time_warming_o2 < (time_warming_o2_thresh.value * TWEAKS_PER_SEC))
 	{

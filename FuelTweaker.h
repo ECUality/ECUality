@@ -29,7 +29,7 @@ class FuelTweaker
 	const int& air_flow;
 	const int& rpm;
 	const int& avg_rpm; 
-	int& global_offset;
+	int& global_correction;
 
 	Map& offset_map;
 	Map& change_map; 
