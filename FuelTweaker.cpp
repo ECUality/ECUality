@@ -30,10 +30,10 @@ FuelTweaker::FuelTweaker(
 	
 	ee_addy(EE_index.getNewAddress(50))
 {
-	o2_upper_thresh.setName(F("O2_upper"));
-	o2_lower_thresh.setName(F("O2_lower"));
+	o2_upper_thresh.setName(F("Oxy_upper"));
+	o2_lower_thresh.setName(F("Oxy_lower"));
 	local_step_size.setName(F("local_step_sz"));
-	time_warming_o2_thresh.setName(F("time_warming_o2"));
+	time_warming_o2_thresh.setName(F("time_warming_Oxy"));
 	time_eng_warm_thresh.setName(F("time_eng_warm"));
 	time_running_thresh.setName(F("time_glo_only"));
 

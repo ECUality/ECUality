@@ -11,14 +11,14 @@ Wcrp coasting_rpm: 1500
 Wirp idling_rpm: 1400
 Wath air_thresh: 90
 Wcld cold_threshold: 170
-Wcra cranking_dur: 1640
-Wout O2_upper: 570
-Wolt O2_lower: 350
-Wtsz tweak_step_sz: 1
+Wcra cranking_dur: 1680
+Wout Oxy_upper: 570
+Wolt Oxy_lower: 350
+Wtsz local_step_sz: 1
 
-Wowi time_warming_o2: 20
-Wewi time_eng_warm: 60
-Weri time_glo_only: 60
+Wowi time_warming_Oxy: 10
+Wewi time_eng_warm: 20
+Weri time_glo_only: 10
 Wlsd ls_dwell: 180
 Whsd hs_dwell: 160
 Wstd start_dwell: 200
