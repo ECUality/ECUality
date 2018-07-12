@@ -101,10 +101,11 @@ void padLastWord(int n, int f)
 		n++;
 	}
 }
-const char reportStatus(void* obj_ptr)
+
+void reportStatus(uint8_t status_to_display)
 {
 	size_t n;
-	switch (status_mode) 
+	switch (status_to_display) 
 	{
 	case 1: 
 		ESerial.print(F("r"));
@@ -169,6 +170,12 @@ const char reportStatus(void* obj_ptr)
 		break;
 
 	}	
+}
+
+const char reportStatusOnce(void* obj_ptr) {
+	int status_to_display;
+	ESerial.timedParseInt(status_to_display); 
+	reportStatus((uint8_t)status_to_display);
 }
 const char reportParams(void* obj_ptr)
 {
@@ -415,6 +422,24 @@ const char ReportTachPeriod(void* obj_ptr) {
 	
 }
 
+//const char SetAirDbg(void* obj_ptr){
+//	ESerial.timedParseInt(air_flow);
+//	ESerial.print(F("air_flow: "));
+//	ESerial.println(air_flow);
+//}
+//
+//const char SetRPMDbg(void* obj_ptr){
+//	static int rpm_int;
+//	ESerial.timedParseInt(rpm_int);
+//	rpm = unsigned(rpm_int); 
+//	ESerial.print(F("rpm: "));
+//	ESerial.println(rpm);
+//}
+//
+//const char AddToLocalDbg(void* obj_ptr){
+//	boss.dbgAddToLocal(1);
+//}
+
 void initProtocol()
 {
 	char cmd[5];
@@ -424,6 +449,10 @@ void initProtocol()
 	index_to_edit = 0;
 	adjustment_size = 1; 
 
+	/*ESerial.addCommand(F("air"), SetAirDbg, NULL);
+	ESerial.addCommand(F("rpm"), SetRPMDbg, NULL);
+	ESerial.addCommand(F("twk"), AddToLocalDbg, NULL);*/
+
 	ESerial.addCommand(F("arm"), toggleEnable, NULL);
 	ESerial.addCommand(F("auto"), setReportMode, NULL);
 	ESerial.addCommand(F("lock"), lockTweaks, NULL);
@@ -431,7 +460,7 @@ void initProtocol()
 
 	ESerial.addCommand(F("+"), increaseParameter, NULL);
 	ESerial.addCommand(F("-"), decreaseParameter, NULL);
-	ESerial.addCommand(F("stat"), reportStatus, NULL);
+	ESerial.addCommand(F("stat"), reportStatusOnce, NULL);
 	ESerial.addCommand(F("para"), reportParams, NULL);
 	ESerial.addCommand(F("save"), saveData, NULL);				// 9
 
@@ -467,9 +496,9 @@ void initProtocol()
 	
 	ESerial.addCommand(F("spia"), CheckStatusMC33810, NULL);	// - 34
 	ESerial.addCommand(F("curr"), CheckCoilCurrent, NULL);
-	ESerial.addCommand(F("nomi"), SetNomI, NULL);
+	ESerial.addCommand(F("nomi"), SetNomI, NULL);				// - 36
 
-	ESerial.addCommand(F("tach"), ReportTachPeriod, NULL);
+	ESerial.addCommand(F("tach"), ReportTachPeriod, NULL);		// - 37
 
 	//Currently max is 50
 }

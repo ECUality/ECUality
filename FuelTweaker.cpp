@@ -6,7 +6,7 @@
 FuelTweaker::FuelTweaker(
 	const unsigned char& run_condition_, 
 	const int& air_flow_, 
-	const int& rpm_, 
+	const unsigned int& rpm_, 
 	const int& avg_rpm_,
 	const int& o2_, int& global_correction_, 
 	Map& offset_map_, Map& change_map_) :

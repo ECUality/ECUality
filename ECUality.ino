@@ -157,12 +157,15 @@ void setPinModes(const uint8_t pins[], const uint8_t direction)
 
 void loop()
 {
+	// reportStatus is queued for action in the task scheduler but called here because serial output
+	// takes forever and doesn't have as high a priority as running the engine. 
 	if (auto_stat == 2)
 	{
 		auto_stat = 1;
-		reportStatus(NULL);
+		reportStatus(status_mode);
 	}
 
+	// check for any available serial input, then parse and run the commands. 
 	ESerial.executeCommand();	
 }
 

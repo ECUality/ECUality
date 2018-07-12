@@ -27,7 +27,7 @@ class FuelTweaker
 	const unsigned char& run_condition;
 	const int& o2;
 	const int& air_flow;
-	const int& rpm;
+	const unsigned int& rpm;
 	const int& avg_rpm; 
 	int& global_correction;
 
@@ -37,7 +37,6 @@ class FuelTweaker
 	void tweakvRPM();
 	void tweakGlobalvO2();
 	void tweakLocalAndGlobalvO2();
-	void apportionLocalGlobal(int adjustment);
 	void addToLocal(int adjustment);
 	
 public:
@@ -62,20 +61,24 @@ public:
 
 	
 	FuelTweaker(
-		const unsigned char& run_condition, 
-		const int& air_flow, 
-		const int& rpm, 
-		const int& avg_rpm,
-		const int& o2, 
-		int& global_correction, 
-		Map& offset_map, 
-		Map& change_map);
+		const unsigned char& run_condition_, 
+		const int& air_flow_, 
+		const unsigned int& rpm_, 
+		const int& avg_rpm_,
+		const int& o2_, 
+		int& global_correction_, 
+		Map& offset_map_, 
+		Map& change_map_);
 	~FuelTweaker();
 	void tweak();
 	static const char status(void* obj_ptr);
 	static const char reportParams(void* obj_ptr);
 	static const char load(void* obj_ptr);
 	static const char save(void* obj_ptr);
+
+	//void dbgAddToLocal(int adjustment) {	// make access to this public
+	//	addToLocal(adjustment);
+	//}
 
 };
 
