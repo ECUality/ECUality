@@ -1,0 +1,64 @@
+
+
+# acceleration enrichment stabilize rate
+# cold engine threshold 
+# cranking duration nominal 
+# choke scale (extra injector duration vs coolant temperature) 
+
+Wiof idle_offset: -100
+Wglo global_offset: 0
+Wcrp coasting_rpm: 1500
+Wirp idling_rpm: 1400
+Wath air_thresh: 90
+Wcld cold_threshold: 170
+Wcra cranking_dur: 1680
+Wout Oxy_upper: 570
+Wolt Oxy_lower: 350
+Wtsz local_step_sz: 1
+
+Wowi time_warming_Oxy: 10
+Wewi time_eng_warm: 20
+Weri time_glo_only: 10
+Wlsd ls_dwell: 180
+Whsd hs_dwell: 160
+Wstd start_dwell: 200
+
+
+Wcho 5
+temp	170	120	60	10	-20
+choke	0	170	700	900	1000
+
+Wtem 12
+563	454	356	278	208	157	116	88	66	52	41	32
+32	50	68	86	104	122	140	158	176	194	212	230
+
+Wisc 2
+500	1300
+1200	570
+
+Wgri 8	
+air:	220	180	140	100	80	60	40	20	
+rpm:	5000	3589	2589	1863	1341	965	695	500
+
+Winj 8
+	1931	1203	766	596	564	561	560	589
+	2476	1596	944	615	587	587	588	901
+	2464	2006	1223	749	618	635	645	624
+	2471	2338	1632	949	749	635	676	710
+	2472	2170	1898	1229	940	774	757	827
+	2471	2171	1922	1619	1176	945	775	776
+	2473	2161	1900	1744	1484	1166	988	925
+	2473	2160	1899	1789	1537	1301	1185	1129
+
+Wloc 8
+ 	10	40	11	0	0	-4	-1	0	
+ 	82	-53	-2	-247	112	-196	-197	-18	
+ 	63	120	76	-159	77	-73	-116	-24	
+ 	0	32	-89	-244	94	-119	-181	-5	
+ 	0	16	275	-79	-177	-100	-100	-5	
+ 	0	0	82	26	-28	-100	-100	0	
+ 	0	0	-1	-2	-4	-50	-50	1	
+ 	0	0	0	0	0	0	0	1	
+
+save
+Sloc
