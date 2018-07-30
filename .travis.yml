@@ -8,7 +8,8 @@ before_install:
   - sudo mv arduino-1.8.5 /usr/local/share/arduino
   - sudo ln -s /usr/local/share/arduino/arduino /usr/local/bin/arduino
 script:
-  - arduino --verify --board arduino:avr:mega:cpu=atmega2560 $PWD/ECUality.ino
+  - arduino --verify --board arduino:avr:mega:cpu=atmega2560 core/core.ino
+  - arduino --verify --board arduino:avr:mega:cpu=atmega2560 dash-monitor/dash-monitor.ino
 notifications:
   email:
     on_success: change
