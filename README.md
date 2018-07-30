@@ -16,3 +16,12 @@ More info [here](https://hackaday.io/project/4622-ecuality1).
 4. Start the Arduino IDE.
 5. Open `ECUality.ino` in the IDE.
 6. Click "Upload". This will verify the project, and upload the compiled firmware to your Arduino.
+
+## License
+[GNU GPLv3](LICENSE.txt)
+
+## Dependencies
+
+## Contributing
+
+## About
