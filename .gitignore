@@ -223,4 +223,5 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# 
+# Arduino build artifacts
+*.hex
