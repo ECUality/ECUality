@@ -9,7 +9,7 @@ before_install:
   - sudo ln -s /usr/local/share/arduino/arduino /usr/local/bin/arduino
 script:
   - arduino --verify --board arduino:avr:mega:cpu=atmega2560 core/core.ino
-  - arduino --verify --board arduino:avr:mega:cpu=atmega2560 dash-monitor/dash-monitor.ino
+    #- arduino --verify --board arduino:avr:mega:cpu=atmega2560 dash-monitor/dash-monitor.ino
 notifications:
   email:
     on_success: change
