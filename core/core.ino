@@ -395,15 +395,9 @@ void calcIgnitionMarks() {
 
 	spark_position = edge_to_post + 28 - advance;	// advance varies from 0 to 55, so we center it with + 28. 
 
-	spark_mark = (spark_position * tach_period) >> 8;	// mark = (bdeg of event) * (timer tics per 256 bdeg) / (256 bdeg). 
+	spark_mark = ( (unsigned long)spark_position * tach_period ) >> 8;	// mark = (bdeg of event) * (timer tics per 256 bdeg) / (256 bdeg). 
 
-	if (spark_mark < (g_dwell + 4))		// ensure dwell_mark is at least 4. ( dwell_mark could get small at fast RPM )
-	{
-		dwell_mark = 5;
-		// report this somehow 
-	}
-	else
-		dwell_mark = spark_mark - g_dwell;
+	dwell_mark = spark_mark - g_dwell;
 
 	// disable interrupts while Output Compares are set. 
 	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 

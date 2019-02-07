@@ -1,0 +1,66 @@
+Wiof idle_offset: -212
+
+# this was read from ECU with the para command on 2-7-2019
+
+Wglo global_corr: -20
+Wcrp coasting_rpm: 1500
+Wirp idling_rpm: 1400
+Wath air_thresh: 90
+Wcld cold_threshold: 170
+Wcra cranking_dur: 1710
+Wout Oxy_upper: 570
+Wolt Oxy_lower: 350
+Wtsz local_step_sz: 1
+Wowi time_warming_Oxy: 8
+Wewi time_eng_warm: 20
+Weri time_glo_only: 10
+Wlsd ls_dwell: 180
+Whsd hs_dwell: 128
+Wstd start_dwell: 200
+Wcho
+x: 	170	120	60	10	-20	
+y: 	0	202	556	836	1000	
+
+Wtem
+x: 	563	454	356	278	208	157	116	88	66	52	41	32	
+y: 	32	50	68	86	104	122	140	158	176	194	212	230	
+
+Wgri
+x: 	220	180	140	100	80	60	40	20	
+y: 	5000	3589	2589	1863	1341	965	695	500	
+
+Wisc
+x: 	500	1300	
+y: 	1312	590	
+
+air_gridline:
+	220	180	140	100	80	60	40	20	
+rpm_gridline:
+	5000	3589	2589	1863	1341	965	695	500	
+map:
+ 	1931	1203	766	596	564	561	560	589	
+ 	2476	1596	944	615	587	587	588	901	
+ 	2464	2006	1223	749	618	635	645	624	
+ 	2471	2338	1632	949	749	635	676	710	
+ 	2472	2170	1898	1229	940	774	757	827	
+ 	2471	2171	1922	1619	1176	945	775	776	
+ 	2473	2161	1900	1744	1484	1166	988	925	
+ 	2473	2160	1899	1789	1537	1301	1185	1129	
+
+
+## Following in response to rloc
+
+air_gridline:
+	220	180	140	100	80	60	40	20	
+rpm_gridline:
+	5000	3589	2589	1863	1341	965	695	500	
+map:
+ 	10	26	11	-2	0	-4	-1	0	
+ 	104	-202	-169	-344	-150	-295	-215	-18	
+ 	63	55	-35	-330	-86	-284	-231	-24	
+ 	0	-72	-68	-315	-239	-182	-219	-5	
+ 	0	16	256	-158	-172	-111	-148	-5	
+ 	0	0	82	26	-19	-92	-115	0	
+ 	0	0	-1	-2	-4	-50	-50	1	
+ 	0	0	0	0	0	0	0	1	
+
