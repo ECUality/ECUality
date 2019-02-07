@@ -17,8 +17,12 @@
 #include <EEPROM.h>
 #include <SPI.h>
 
-// Data: 60e6 us/min   16us/timer tic (256 prescale, 16Mhz)   2 tach pulses per rev.
-// 60e6 / 16 / 2 = 468750 timer tics/pulse * rpm 
+// Data: 60e6 us/min   16us/timer tic (256 prescale, 16Mhz)   
+// quarter-rev of dizzy is measured 1/2 rev of crank
+// us/min / us/tic  = tics/min
+// tics / min * rev/sample = rev/min * tics/sample
+// rev/min * tics/sample / tics/sample = rev/min 
+// 60e6 / 16 / 2 = 1,875,000 rpm * tics/sample
 // so rpm = 1875000/(spark_period)
 
 #define TICS_PER_TACH 1875000
@@ -48,7 +52,7 @@ void setup()
 	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
 	task[2] = calcRPMandDwell;		ms_freq_of_task[2] = 50;
 	task[3] = calcInjDuration;		ms_freq_of_task[3] = 50;
-	task[4] = updateInjectors;		ms_freq_of_task[4] = 50;
+	task[4] = calcIgnitionMarks;	ms_freq_of_task[4] = 50;
 	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
 	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
 	task[7] = readOilPressure;		ms_freq_of_task[7] = 250;
@@ -73,10 +77,8 @@ void setup()
 	digitalWrite(cs_sd_pin, HIGH);
 
 
-
 	inj_duration = 5;
-	tach_period_i = 0;
-	tach_period[tach_period_i] = old_tach_period = 0;
+	tach_period = 0;
 
 	Map::clear(&change_map);
 	good_ee_loads = loadData(NULL);		// load data from EE.
@@ -99,13 +101,16 @@ void setup()
 	TIMSK3 |= _BV(OCIE3A);				// enable output compare A interrupt on timer 3
 	//TIMSK3 |= _BV(TOIE3);				// enable timer overflow interrupt on timer 3 (just-in-case-of-something-weird)
 
-	// Configure Timer4 for measuring ignition dwell (using interrupt)
-	TCCR4A = 0;							// clear control register A 
-	TCCR4B = _BV(CS42);					// start the timer at clk/256 prescale. = 16us per tic. 
+	// Configure Timers 4 and 5 for measuring ignition dwell (using interrupt)
+	TCCR4A = TCCR5A = 0;				// clear control register A 
+	TCCR4B = _BV(CS42);					// start the timers at clk/256 prescale. = 16us per tic. 
+	TCCR5B = _BV(CS52);
 	//TCCR4B = _BV(CS42) | _BV(CS40);		// start the timer at clk/1024 prescale. = 64us per tic. 
 
 	// enable timer overflow interrupt for non-running and slow-cranking issues
 	TIMSK4 |= _BV(TOIE4);	// this affects rpm calculation for low RPM
+	TIMSK5 |= _BV(TOIE5);
+
 
 	// Timer4 NOTE: updateDwell() enables or disables the ignition system by 
 	// setting or clearing OCIE4A, the output compare interrupt enable bit. 
@@ -124,14 +129,17 @@ void setup()
 	// COM0B<1:0>	= 2 (10)	same as A.
 	// CS0<2:0>		= 1 (001)	1:1 pre-scaling, timer running. 
 
-	attachInterrupt(tach_interrupt, isrTachRisingEdge, RISING);	// interrupt 4 maps to pin 19. 
+	// next line: the input circuit inverts the signal, so a rising edge from the distributor produces a falling
+	// edge at the Arduino.  We trigger when the tab enters the Hall sensor.  The hall sensor produces a high signal
+	// when it is looking at a tab, so we want to trigger here on a FALLING edge. 
+	attachInterrupt(tach_interrupt, isrTachEdge, FALLING);	// interrupt 4 maps to pin 19. 
 	attachInterrupt(coil_current_interrupt, isrCoilNominalCurrent, RISING);	// interrupt 3 maps to pin 20. 
 
 	EEPROM_readAnything(ENABLE_ADDY, enable);
 	if (enable)
 		enableDrive();
 	else
-		ESerial.println(F("fuck off asshole"));		// said to either my forgetful self, or a van-thief. 
+		ESerial.println(F("fuck off, asshole"));		// said to either my forgetful self, or a van-thief. 
 
 	EEPROM_readAnything(TWEAK_LOCK_ADDY, boss.lockout);
 	if (boss.lockout)
@@ -230,13 +238,23 @@ void readOilPressure()
 }
 void calcRPMandDwell()
 {
-	static unsigned int old_rpm = 0;
+	static uint16_t old_rpm = 0;
+	static uint16_t l_dwell;
+	static uint16_t tach_period_copy;
+	char cSREG;
+
+	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
+	cli(); //disable interrupts during copy
+	tach_period_copy = tach_period;
+	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
+
 	// (60e6 us/min) / (4 us/tic)				= 15e6 tics/min
 	// (tics/min) / (tach_period tics/pulse)	= pulses/min
 	// pulses/min * (1 rev/pulse)				= 15e6 / tach_period 
 	// we're pulsing the injectors (and measuring) every other tach input pulse, so it's 1:1 with crankshaft. 
 	old_rpm = rpm;
-	rpm = TICS_PER_TACH / tach_period[tach_period_i];
+
+	rpm = TICS_PER_TACH / tach_period_copy;		// tach_period_copy doesn't get touched by interrupts, so this is safe. 
 	rpm_d = old_rpm - rpm;
 	avg_rpm.addSample(rpm);
 	
@@ -262,14 +280,20 @@ void calcRPMandDwell()
 	if ((rpm > MIN_IGN_RPM) && (abs(rpm_d) < (rpm >> 2)))
 	{
 		// clear the output compare flag. 
-		TIFR4 &= ~_BV(OCF4A);	// clear the output compare flag. 
-		TIMSK4 |= _BV(OCIE4A);	// enable the out.comp. interrupt (ignition system)
+		TIFR4 &= ~(_BV(OCF4A) | _BV(OCF4B));	// clear the output compare flags. 
+		TIFR5 &= ~(_BV(OCF5A) | _BV(OCF5B));	
+
+		TIMSK4 |= (_BV(OCIE4A) | _BV(OCIE4B));	// enable the out.comp. interrupt (ignition system)
+		TIMSK5 |= (_BV(OCIE5A) | _BV(OCIE5B));	
+
 		digitalWrite(drv_en_pin, LOW);
 	}
 	else
 	{
 		// disable ignition system. 
 		TIMSK4 &= ~_BV(OCIE4A);			// this prevents the coil pin from being set
+		TIMSK5 &= ~_BV(OCIE5A);	
+
 		digitalWrite(drv_en_pin, HIGH);	// this starts a soft-shutdown
 		digitalWrite(coil1_pin, LOW);	// turn off the coil. 
 	}
@@ -277,53 +301,118 @@ void calcRPMandDwell()
 	if (rpm < 800)
 	{
 		if (digitalRead(cranking_pin))
-			g_dwell = starting_dwell.value;		// High dwell during cranking
+			l_dwell = starting_dwell.value;		// High dwell during cranking
 		else
-			g_dwell = low_speed_dwell.value;	//this is a longer dwell
+			l_dwell = low_speed_dwell.value;	//this is a longer dwell
 	}
 	else
-		g_dwell = hi_speed_dwell.value;
+		l_dwell = hi_speed_dwell.value;
+
+	cli(); //disable interrupts during copy
+	g_dwell = l_dwell;
+	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
 }
 
 // Pulse duration business
 void calcInjDuration()
 {
-	static unsigned int new_inj_duration;
+	static unsigned int l_inj_duration;
 	static int accel_offset, choke_offset, air_temp_offset, global_offset;
 
 	if (digitalRead(cranking_pin))
 	{
+		map_inj_duration = cranking_dur.value;
 		choke_offset = adjustForColdEngine(cranking_dur.value, coolant_temp);	
-		inj_duration = cranking_dur.value + choke_offset;
+		l_inj_duration = map_inj_duration + choke_offset;
 		return;
 	}
 
-	if (run_condition & _BV(IDLING))	// only consider cold engine enrichment for idle.  No global correction. 
+	else if (run_condition & _BV(IDLING))	// only consider cold engine enrichment for idle.  No global correction. 
 	{
-		new_inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
-		inj_duration = (new_inj_duration + adjustForColdEngine(new_inj_duration, coolant_temp));
-		return; 
+		map_inj_duration = idle_offset.value + idle_scale.interpolate(rpm);
+		choke_offset = adjustForColdEngine(map_inj_duration, coolant_temp);
+		l_inj_duration = map_inj_duration + choke_offset;
 	}
 
-	if (run_condition & _BV(COASTING))
+	else if (run_condition & _BV(COASTING))
 	{
-		inj_duration = 0;
-		return;
+		map_inj_duration = 0;
+		l_inj_duration = 0;
 	}
-	
-	// find nominal
-	new_inj_duration = inj_map.interpolate(rpm, air_flow, &offset_map); 
-	
-	// adjust for stuff
-	accel_offset = adjustForAccel(air_flow);		// these should not be order dependent.  
-	choke_offset = adjustForColdEngine(new_inj_duration, coolant_temp);
-	air_temp_offset = adjustForAirTemp(new_inj_duration, air_temp);
-	global_offset = (new_inj_duration >> 8)*global_correction.value;
 
-	new_inj_duration += accel_offset + choke_offset + air_temp_offset + global_offset;
+	else
+	{
+		// find nominal
+		map_inj_duration = inj_map.interpolate(rpm, air_flow, &offset_map);
+
+		// adjust for stuff
+		accel_offset = adjustForAccel(air_flow);		// these should not be order dependent.  
+		choke_offset = adjustForColdEngine(map_inj_duration, coolant_temp);
+		air_temp_offset = adjustForAirTemp(map_inj_duration, air_temp);
+		global_offset = (map_inj_duration >> 8)*global_correction.value;
+
+		l_inj_duration = map_inj_duration + accel_offset + choke_offset + air_temp_offset + global_offset;
+	}
 
 	// output that shit
-	inj_duration = new_inj_duration;
+	char cSREG;
+	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
+	cli(); //disable interrupts during copy
+	inj_duration = l_inj_duration;
+	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
+}
+
+// Ignition advance business - executes immediately after calcInjDuration()
+void calcIgnitionMarks() {
+	static uint16_t dwell_mark, spark_mark;		// these are the timer settings for the dwell start and spark events.  
+	char cSREG;
+
+	const uint16_t edge_to_post = 256;
+	static uint16_t spark_position;
+
+	// here we calculate the centrifugal advance (rpm based) 
+	// the units are 1/512ths of a revolution to facilitate division speeds. 
+	// the original timing  
+	if (rpm < 1100) advance = 0;
+	else if (rpm < 2124) advance = (((rpm - 1100) * 5) >> 8);
+	else if (rpm < 2380) advance = 20 + (((rpm - 2124) * 3) >> 7);
+	else if (rpm < 4428) advance = 26 + (((rpm - 2380) * 5) >> 10);
+	else advance = 35;
+
+	// now we do the vacuum advance.  (light-load advance)
+	// The engine load is indicated by the injector duration (how much fuel enters the cylinder every cycle) 
+	// At sea-level, the maximum injector duration is about 1,800.  The minimum while coasting is about 500.  
+	// Assuming 1800 = 1bar (absolute) and a linear scale, then 500 = .278 bar(abs) = .722 bar vacuum (21inHg)
+	// The manual calls for vacuum advance to begin at .21 bar and max out at .36 bar, 14 degrees (= 20/512'ths)
+	// Using the injector duration scale, .21 bar vacuum = .79 bar absolute = .79*1800 = 1422 inj.
+	// Similarly, .36 bar vacuum = .64 bar absolute = 1152 injector.  
+	if (map_inj_duration < 1200) advance += 20;
+	else if (map_inj_duration < 1456) advance += (((1456 - map_inj_duration) * 5) >> 6);
+
+	// That's it.  The advance can vary from 0 to 55.  1/512ths =  0 - 38.7 degrees. 
+	// At 3500 rpm and inj_duration of 1200, we'll have 31(rpm) and 20(load) = 51/512 = 36 degrees. 
+
+
+	spark_position = edge_to_post + 28 - advance;	// advance varies from 0 to 55, so we center it with + 28. 
+
+	spark_mark = (spark_position * tach_period) >> 8;	// mark = (bdeg of event) * (timer tics per 256 bdeg) / (256 bdeg). 
+
+	if (spark_mark < (g_dwell + 4))		// ensure dwell_mark is at least 4. ( dwell_mark could get small at fast RPM )
+	{
+		dwell_mark = 5;
+		// report this somehow 
+	}
+	else
+		dwell_mark = spark_mark - g_dwell;
+
+	// disable interrupts while Output Compares are set. 
+	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
+	cli(); //disable interrupts during copy to the volatile variables. This way if a rising edge occurs in the middle of
+	// writing to v_spark_mark, I don't end up with rubbish in OCR4B. Instead, the copy is allowed to finish. 
+	v_spark_mark = spark_mark;
+	v_dwell_mark = dwell_mark;
+	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
+
 }
 int adjustForAccel(int air_flow)
 {
@@ -379,12 +468,13 @@ void updateRunCondition()
 	if (coolant_temp >= cold_threshold.value)
 		run_condition |= _BV(WARM);
 }
-void updateInjectors()
+
+/*void updateInjectors()
 {
-	if (inj_duration > 10)
+	if (inj_duration > 100)
 		OCR3A = inj_duration;		// normal operation
 	else
-		OCR3A = 10;					// if inj_duration = 0, we just drop it. 
+		OCR3A = 100;				// if inj_duration = 0, we just drop it. 
 
 	// if we just set the compare register below the timer, we need to close the injector 
 	// because if we don't the timer will have to wrap all the way around before it stops. 
@@ -394,7 +484,7 @@ void updateInjectors()
 		PORTL &= ~0xAA;			// 0b01010101; 
 		PORTA &= ~0x08;				// 
 	}
-}
+}*/
 
 
 // analog reading scaling
@@ -462,46 +552,46 @@ ISR( TIMER1_CAPT_vect )
 }
 
 // Injectors open and spark events
-void isrTachRisingEdge()
+void isrTachEdge()
 {
-	// Spark!  (time-sensitive, hence placement at top of this ISR)
-	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
-
 
 	// these fuel injection actions happen every other pulse.  We use pulse_divider to track which pulse we're on.
 	static char pulse_divider = 0;	
 	if (!pulse_divider)
 	{
-		GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
+		// Ignition operations //
+		tach_period = TCNT5;	// this was reset last edge, so this measures the most recent tab duration. 
 
-		//tach_period = TCNT3; 		// record the timer setting 
+		TCNT4 = 0;	// set a timer for when we begin dwell again
+		OCR4A = v_dwell_mark;		// Set the Output compare value for dwell and sparking events.  
+		OCR4B = v_spark_mark;
+
+		// Fuel operations //
+		GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
 		TCNT3 = 0;					// start the timer over. 
 
 		// set all injectors high (in same instruction)
 		if (inj_duration)
 		{
 			PORTL |= 0xAA;				// 0b 1010 1010;
-			PORTA |= 0x08;				// 0b 0000 1000  (A3 is turned on) 
+			PORTA |= 0x08;				// 0b 0000 1000  (A3 is turned on for LED indication of function) 
+			OCR3A = inj_duration; 
 		}
+		else
+			OCR3A = 100;				// if inj_duration = 0, we keep OCR3A positive. 
+
 		pulse_divider = 1;
 	}
 	else
+	{
+		// Ignition operations //
+		tach_period = TCNT4;		// set last edge, so this measures only one tab 
+
+		TCNT5 = 0;	// set a timer for when we begin dwell again
+		OCR5A = v_dwell_mark;		// Set the Output compare value for dwell and sparking events.  
+		OCR5B = v_spark_mark;
 		--pulse_divider;
-
-	// Finish the ignition operations here.  (Dwell is not as time-sensitive)
-	old_tach_period = tach_period[tach_period_i];
-	// spark period measured separately to handle low-rpm and update every pulse. 
-	if (++tach_period_i >= TACH_PERIOD_N)
-		tach_period_i = 0;
-	tach_period[tach_period_i] = TCNT4;
-	
-
-	// set a timer for when we begin dwell again
-	TCNT4 = 0;
-	// here we set the on-time for charging the coil (dwell) to be 
-	// dwell.value * 4us before the next predicted tach rising edge.
-	OCR4A = tach_period[tach_period_i] - g_dwell;
-	
+	}
 
 }
 
@@ -518,18 +608,35 @@ ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A.
 {
 	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
 }
+ISR(TIMER5_COMPA_vect)			// same as for timer 4 but uses timer 5 so timer doesn't get reset before both compares happen
+{
+	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
+}
+
+// Spark event
+ISR(TIMER4_COMPB_vect)
+{
+	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
+}
+ISR(TIMER5_COMPB_vect)
+{
+	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
+}
 
 // De-energize ignition coil without spark (dwell exceeded maximum duration)
 ISR(TIMER4_OVF_vect)
 {
-	/*if (++tach_period_i >= TACH_PERIOD_N)
-		tach_period_i = 0;*/
-	tach_period[tach_period_i] = 65000;	// this makes it obvious the engine is not running 
-							// rpm will be 468,750 / 65,000 = 7 rpm
+	tach_period = 65000;	// this makes it obvious the engine is not running 
+							// rpm will be 1,875,000 / 65,000 = 28 rpm
 
 	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
-
 }
+ISR(TIMER5_OVF_vect)	// same as directly above. Different timer
+{
+	tach_period = 65000;	
+	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
+}
+
 
 // Monitor nominal current pin on ignition driver 
 void isrCoilNominalCurrent() {

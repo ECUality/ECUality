@@ -24,20 +24,19 @@ uint8_t i_autoreport;
 
 // sensor input variables
 int air_flow, o2, air_temp, coolant_temp, oil_pressure;
-unsigned int inj_duration, rpm;
+uint16_t inj_duration, map_inj_duration, rpm;
 
 // Ignition variables
-unsigned int old_tach_period, g_dwell;	
-unsigned char coil_current_flag;
+uint16_t g_dwell, advance;	
+volatile uint16_t v_spark_mark, v_dwell_mark; 
+uint8_t coil_current_flag;
 MovingAverage avg_rpm(4);
 
-#define TACH_PERIOD_N 64
-unsigned char tach_period_i;
-unsigned int tach_period[TACH_PERIOD_N];
+volatile uint16_t tach_period;
 
 // variables that capture dynamic aspects of sensor input
 int air_flow_d, air_flow_snap, o2_d, rpm_d;
-//unsigned int last_tach_period;
+
 
 // fault counters
 unsigned int n_rpm_hi_faults, n_rpm_lo_faults, n_air_faults;

@@ -112,8 +112,8 @@ void reportStatus(uint8_t status_to_display)
 		n = ESerial.print(avg_rpm.average);
 		padLastWord(n, 5);
 
-		ESerial.print(F("O"));
-		n = ESerial.print(o2);
+		ESerial.print(F("a"));
+		n = ESerial.print(advance);
 		padLastWord(n, 4);
 
 		ESerial.print(F("i"));
@@ -122,10 +122,17 @@ void reportStatus(uint8_t status_to_display)
 		break;
 
 	case 2:
-		ESerial.print(F("glo "));
-		ESerial.print(global_correction.value);
-		ESerial.print(F(" loc "));
-		ESerial.println(offset_map.interpolate(rpm, air_flow, NULL));
+		ESerial.print(F("g"));
+		n = ESerial.print(global_correction.value);
+		padLastWord(n, 4);
+
+		ESerial.print(F("l"));
+		n = ESerial.print(offset_map.interpolate(rpm, air_flow, NULL));
+		padLastWord(n, 5);
+
+		ESerial.print(F("O"));
+		ESerial.println(o2);
+
 		break;
 
 	case 3:
@@ -410,14 +417,7 @@ const char SetNomI(void* obj_ptr) {
 const char ReportTachPeriod(void* obj_ptr) {
 
 	ESerial.print(F("tach_period: "));
-	for (int i = 0; i < TACH_PERIOD_N; i++)
-	{
-		ESerial.print(tach_period[i]);
-		tach_period[i] = 0xFFFF;
-		ESerial.print(" ");
-		if (i == (TACH_PERIOD_N >> 1))
-			ESerial.println();
-	}
+	ESerial.print(tach_period);
 	ESerial.println();
 	
 }

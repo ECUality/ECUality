@@ -11,8 +11,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{8CAA4D41-B883-498B-8419-DFF36F8E5400}</ProjectGuid>
-    <RootNamespace>ECUality</RootNamespace>
+    <ProjectGuid>{391D153F-2718-4EFE-BA98-D894F6B4CA30}</ProjectGuid>
+    <RootNamespace>core</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -44,10 +44,10 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>C:\Program Files (x86)\Arduino\hardware\arduino\cores\arduino;C:\Program Files (x86)\Arduino\hardware\arduino\variants\mega;D:\Repos\ECUality;C:\Program Files (x86)\Arduino\libraries\EEPROM;C:\Program Files (x86)\Arduino\libraries\EEPROM\utility;C:\Program Files (x86)\Arduino\libraries;C:\Program Files (x86)\Arduino\hardware\arduino\libraries;C:\Program Files (x86)\Visual Micro\Visual Micro for Arduino\Micro Platforms\default\debuggers;D:\Repos\libraries;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\avr\;c:\program files (x86)\arduino\hardware\tools\avr\avr\;c:\program files (x86)\arduino\hardware\tools\avr\lib\gcc\avr\4.3.2\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ForcedIncludeFiles>D:\Repos\ECUality\Visual Micro\.ECUality.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories>C:\Program Files (x86)\Arduino\hardware\arduino\avr\cores\arduino;C:\Program Files (x86)\Arduino\hardware\arduino\avr\variants\mega;D:\Repos\ECUality\core;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\EEPROM;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\EEPROM\utility;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\SPI;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\SPI\utility;C:\Program Files (x86)\Arduino\libraries;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries;C:\Program Files (x86)\Visual Micro\Visual Micro for Arduino\Micro Platforms\default\debuggers;D:\Repos\libraries;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\avr\;c:\program files (x86)\arduino\hardware\tools\avr\avr\;c:\program files (x86)\arduino\hardware\tools\avr\lib\gcc\avr\4.8.1\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>D:\Repos\ECUality\core\Visual Micro\.core.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <IgnoreStandardIncludePath>true</IgnoreStandardIncludePath>
-      <PreprocessorDefinitions>__AVR_ATmega2560__;ARDUINO=106;ARDUINO_MAIN;__AVR__;__avr__;F_CPU=16000000L;__cplusplus;GCC_VERSION=40302;ARDUINO_ARCH_AVR;ARDUINO_AVR_MEGA2560;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__AVR_ATmega2560__;_VMDEBUG=1;ARDUINO=160;ARDUINO_MAIN;__AVR__;__avr__;F_CPU=16000000L;__cplusplus;GCC_VERSION=40801;ARDUINO_ARCH_AVR;ARDUINO_AVR_MEGA2560;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -60,8 +60,8 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>C:\Program Files (x86)\Arduino\hardware\arduino\avr\cores\arduino;C:\Program Files (x86)\Arduino\hardware\arduino\avr\variants\mega;D:\Repos\ECUality;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\EEPROM;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\EEPROM\utility;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\SPI;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\SPI\utility;C:\Program Files (x86)\Arduino\libraries;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries;C:\Program Files (x86)\Visual Micro\Visual Micro for Arduino\Micro Platforms\default\debuggers;D:\Repos\libraries;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\avr\;c:\program files (x86)\arduino\hardware\tools\avr\avr\;c:\program files (x86)\arduino\hardware\tools\avr\lib\gcc\avr\4.8.1\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ForcedIncludeFiles>D:\Repos\ECUality\Visual Micro\.ECUality.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories>C:\Program Files (x86)\Arduino\hardware\arduino\avr\cores\arduino;C:\Program Files (x86)\Arduino\hardware\arduino\avr\variants\mega;D:\Repos\ECUality\core;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\EEPROM;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\EEPROM\utility;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\SPI;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries\SPI\utility;C:\Program Files (x86)\Arduino\libraries;C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries;C:\Program Files (x86)\Visual Micro\Visual Micro for Arduino\Micro Platforms\default\debuggers;D:\Repos\libraries;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\;c:\program files (x86)\arduino\hardware\tools\avr\avr\include\avr\;c:\program files (x86)\arduino\hardware\tools\avr\avr\;c:\program files (x86)\arduino\hardware\tools\avr\lib\gcc\avr\4.8.1\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>D:\Repos\ECUality\core\Visual Micro\.core.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <IgnoreStandardIncludePath>true</IgnoreStandardIncludePath>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <PreprocessorDefinitions>__AVR_ATmega2560__;ARDUINO=160;ARDUINO_MAIN;__AVR__;__avr__;F_CPU=16000000L;__cplusplus;GCC_VERSION=40801;ARDUINO_ARCH_AVR;ARDUINO_AVR_MEGA2560;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -73,29 +73,57 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="ECUality.ino">
+    <None Include="core.ino">
       <FileType>CppCode</FileType>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Defines.h" />
     <ClInclude Include="Arrays.h">
       <FileType>CppCode</FileType>
     </ClInclude>
-    <ClInclude Include="ECUPins.h" />
-    <ClInclude Include="ECUProtocol.h" />
-    <ClInclude Include="ECUSerial.h" />
-    <ClInclude Include="EEIndex.h" />
-    <ClInclude Include="EEPROMAnything.h" />
-    <ClInclude Include="FuelTweaker.h" />
-    <ClInclude Include="Globals.h" />
-    <ClInclude Include="Interpolation.h" />
-    <ClInclude Include="Map.h" />
-    <ClInclude Include="MovingAverage.h" />
-    <ClInclude Include="Parameter.h" />
-    <ClInclude Include="Scale.h" />
-    <ClInclude Include="SPICommands.h" />
-    <ClInclude Include="Visual Micro\.ECUality.vsarduino.h" />
+    <ClInclude Include="Defines.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="ECUPins.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="ECUProtocol.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="ECUSerial.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="EEIndex.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="EEPROMAnything.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="FuelTweaker.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="Globals.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="Interpolation.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="Map.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="MovingAverage.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="Parameter.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="Scale.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="SPICommands.h">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="Visual Micro\.core.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ECUSerial.cpp" />
