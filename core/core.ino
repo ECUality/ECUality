@@ -240,12 +240,12 @@ void calcRPMandDwell()
 {
 	static uint16_t old_rpm = 0;
 	static uint16_t l_dwell;
-	static uint16_t tach_period_copy;
+	static uint16_t l_tach_period; // a local to this function copy of the volatile tach-period
 	char cSREG;
 
 	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
 	cli(); //disable interrupts during copy
-	tach_period_copy = tach_period;
+	l_tach_period = tach_period;
 	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
 
 	// (60e6 us/min) / (4 us/tic)				= 15e6 tics/min
@@ -254,7 +254,7 @@ void calcRPMandDwell()
 	// we're pulsing the injectors (and measuring) every other tach input pulse, so it's 1:1 with crankshaft. 
 	old_rpm = rpm;
 
-	rpm = TICS_PER_TACH / tach_period_copy;		// tach_period_copy doesn't get touched by interrupts, so this is safe. 
+	rpm = TICS_PER_TACH / l_tach_period;		// tach_period_copy doesn't get touched by interrupts, so this is safe. 
 	rpm_d = old_rpm - rpm;
 	avg_rpm.addSample(rpm);
 	
@@ -364,7 +364,8 @@ void calcInjDuration()
 
 // Ignition advance business - executes immediately after calcInjDuration()
 void calcIgnitionMarks() {
-	static uint16_t dwell_mark, spark_mark;		// these are the timer settings for the dwell start and spark events.  
+	static uint16_t dwell_mark, spark_mark;	// these are the timer settings for the dwell start and spark events.  
+	static uint16_t l_tach_period;			// this is a local copy of the volatile tach_period.
 	char cSREG;
 
 	const uint16_t edge_to_post = 256;
@@ -395,14 +396,18 @@ void calcIgnitionMarks() {
 
 	spark_position = edge_to_post + 28 - advance;	// advance varies from 0 to 55, so we center it with + 28. 
 
-	spark_mark = ( (unsigned long)spark_position * tach_period ) >> 8;	// mark = (bdeg of event) * (timer tics per 256 bdeg) / (256 bdeg). 
+	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
+	cli(); //disable interrupts during copy to the volatile variables. 
+	l_tach_period = tach_period; 
+	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
+
+	spark_mark = ( (unsigned long)spark_position * l_tach_period ) >> 8;	// mark = (bdeg of event) * (timer tics per 256 bdeg) / (256 bdeg). 
 
 	dwell_mark = spark_mark - g_dwell;
 
 	// disable interrupts while Output Compares are set. 
 	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
-	cli(); //disable interrupts during copy to the volatile variables. This way if a rising edge occurs in the middle of
-	// writing to v_spark_mark, I don't end up with rubbish in OCR4B. Instead, the copy is allowed to finish. 
+	cli(); //disable interrupts during copy to the volatile variables. 
 	v_spark_mark = spark_mark;
 	v_dwell_mark = dwell_mark;
 	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
