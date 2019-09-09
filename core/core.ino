@@ -324,7 +324,6 @@ void calcInjDuration()
 		map_inj_duration = cranking_dur.value;
 		choke_offset = adjustForColdEngine(cranking_dur.value, coolant_temp);	
 		l_inj_duration = map_inj_duration + choke_offset;
-		return;
 	}
 
 	else if (run_condition & _BV(IDLING))	// only consider cold engine enrichment for idle.  No global correction. 
