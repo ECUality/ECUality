@@ -27,7 +27,7 @@
 
 #define TICS_PER_TACH 1875000
 
-void addTask(void(*task)(), unsigned int ms);
+void addTask(void(*task)(), unsigned int ms);	// for some reason, this needs a prototype before it is used where others don't. 
 
 void setup()
 {
