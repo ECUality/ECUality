@@ -252,7 +252,7 @@ const char toggleEnable(void* obj_ptr) {
 	}
 }
 
-const char lockTweaks(void* obj_ptr) {
+const char toggleTweaksLock(void* obj_ptr) {
 	boss.lockout = !boss.lockout;
 
 	// save the state (locked or unlocked) to eeprom so the vehicle wakes in same state. 
@@ -422,6 +422,51 @@ const char ReportTachPeriod(void* obj_ptr) {
 	
 }
 
+const char toggleSimulateTach(void* obj_ptr) {
+	simulate_tach_en = !simulate_tach_en;
+
+	if (simulate_tach_en) {
+		fuel_pump_en = 0;					// turn off fuel pump so we don't flood engine.
+		digitalWrite(fuel_pin, LOW);		
+
+		ESerial.println(F("fpump off, simulated tach on"));
+	}
+	else {
+		ESerial.println(F("simulated tach off"));
+	}
+}
+const char toggleFuelPump(void* obj_ptr) {
+	fuel_pump_en = !fuel_pump_en;	// toggle the enable flag. 
+
+	if (fuel_pump_en)
+	{
+		digitalWrite(fuel_pin, HIGH);
+		ESerial.println(F("fuel pump on"));
+	}
+
+	else
+	{
+		digitalWrite(fuel_pin, LOW);
+		ESerial.println(F("fuel pump off"));
+	}
+}
+const char toggleInjector(void* obj_ptr) {
+	injector_en = !injector_en;
+
+	if (injector_en)
+		ESerial.println(F("injectors on"));
+	else
+		ESerial.println(F("injectors off"));
+}
+const char toggleCoil(void* obj_ptr) {
+	coil_en = !coil_en;
+
+	if (coil_en)
+		ESerial.println(F("coil on"));
+	else
+		ESerial.println(F("coil off"));
+}
+
 //const char SetAirDbg(void* obj_ptr){
 //	ESerial.timedParseInt(air_flow);
 //	ESerial.print(F("air_flow: "));
@@ -455,7 +500,7 @@ void initProtocol()
 
 	ESerial.addCommand(F("arm"), toggleEnable, NULL);
 	ESerial.addCommand(F("auto"), setReportMode, NULL);
-	ESerial.addCommand(F("lock"), lockTweaks, NULL);
+	ESerial.addCommand(F("lock"), toggleTweaksLock, NULL);
 	ESerial.addCommand(F("mode"), reportMode, NULL);			// 4
 
 	ESerial.addCommand(F("+"), increaseParameter, NULL);
@@ -499,6 +544,11 @@ void initProtocol()
 	ESerial.addCommand(F("nomi"), SetNomI, NULL);				// - 36
 
 	ESerial.addCommand(F("tach"), ReportTachPeriod, NULL);		// - 37
+
+	ESerial.addCommand(F("tst"), toggleSimulateTach, NULL);
+	ESerial.addCommand(F("tfp"), toggleFuelPump, NULL);
+	ESerial.addCommand(F("tinj"), toggleInjector, NULL);
+	ESerial.addCommand(F("tcoi"), toggleCoil, NULL);
 
 	//Currently max is 50
 }

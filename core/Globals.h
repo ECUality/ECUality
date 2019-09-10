@@ -13,12 +13,13 @@ char good_ee_loads;
 uint8_t auto_stat;
 unsigned char run_condition;
 uint8_t status_mode;
+uint8_t simulate_tach_en, fuel_pump_en, injector_en, coil_en; 
 
 // task variables
 unsigned int ms_freq_of_task[20];
 unsigned int task_runtime[20];
 unsigned int ms_since_last_task[20] = { 0 };
-void(*task[20]) (void);
+void(*task_list[20]) (void);
 uint8_t n_tasks;
 uint8_t i_autoreport; 
 

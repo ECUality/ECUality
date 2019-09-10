@@ -27,15 +27,18 @@
 
 #define TICS_PER_TACH 1875000
 
+void addTask(void(*task)(), unsigned int ms);
+
 void setup()
 {
 	char enable = 0;
+	simulate_tach_en = 0;					// default to debug resources off. 
+	fuel_pump_en = injector_en = coil_en = 1;	// default to having driving resources on. 
 
 	ESerial.begin(9600);
 	//Serial.begin(115200);
 
 	InitSPI();
-
 
 	NameParams();
 
@@ -48,18 +51,19 @@ void setup()
 	// The following "task" array contains the periods of the level-2 events. 
 	// Execution of these events can be interrupted by a level-1 event. 
 	// These events will interrupt execution of a level-3 event. 
-	task[0] = readAirFlow;			ms_freq_of_task[0] = 50;
-	task[1] = readO2Sensor;			ms_freq_of_task[1] = 50;
-	task[2] = calcRPMandDwell;		ms_freq_of_task[2] = 50;
-	task[3] = calcInjDuration;		ms_freq_of_task[3] = 50;
-	task[4] = calcIgnitionMarks;	ms_freq_of_task[4] = 50;
-	task[5] = readAirTemp;			ms_freq_of_task[5] = 250;
-	task[6] = readCoolantTemp;		ms_freq_of_task[6] = 250;
-	task[7] = readOilPressure;		ms_freq_of_task[7] = 250;
-	task[8] = autoReport;			ms_freq_of_task[8] = 1000;
-	task[9] = updateRunCondition;	ms_freq_of_task[9] = 100;
-	task[10] = tweakFuel;			ms_freq_of_task[10] = TWEAK_FREQ_MS;
-	n_tasks = 11;
+	n_tasks = 0;
+	addTask(simulatedTachEdge, 50);
+	addTask(readAirFlow, 50);
+	addTask(readO2Sensor, 50);
+	addTask(calcRPMandDwell, 50);
+	addTask(calcInjDuration, 50);
+	addTask(calcIgnitionMarks, 50);
+	addTask(readAirTemp, 250);
+	addTask(readCoolantTemp, 250);
+	addTask(readOilPressure, 250);
+	addTask(autoReport, 1000);
+	addTask(updateRunCondition, 100);
+	addTask(tweakFuel, TWEAK_FREQ_MS);
 
 	i_autoreport = 8;		// this is referenced to delay next autoreport message.  
 
@@ -132,14 +136,15 @@ void setup()
 	// next line: the input circuit inverts the signal, so a rising edge from the distributor produces a falling
 	// edge at the Arduino.  We trigger when the tab enters the Hall sensor.  The hall sensor produces a high signal
 	// when it is looking at a tab, so we want to trigger here on a FALLING edge. 
-	attachInterrupt(tach_interrupt, isrTachEdge, FALLING);	// interrupt 4 maps to pin 19. 
+
+	attachInterrupt(tach_interrupt, isrTachEdge, FALLING);	// interrupt 4 maps to pin 19. 	
 	attachInterrupt(coil_current_interrupt, isrCoilNominalCurrent, RISING);	// interrupt 3 maps to pin 20. 
 
 	EEPROM_readAnything(ENABLE_ADDY, enable);
 	if (enable)
 		enableDrive();
 	else
-		ESerial.println(F("fuck off, asshole"));		// said to either my forgetful self, or a van-thief. 
+		ESerial.println(F("engine disabled"));		// said to either my forgetful self, or a van-thief. 
 
 	EEPROM_readAnything(TWEAK_LOCK_ADDY, boss.lockout);
 	if (boss.lockout)
@@ -151,6 +156,15 @@ void setup()
 	// it must come some significant time after SPIInit().  Hence this placement. 
 	SPIInitSparkMode();	
 }
+
+void addTask(void(*task)(), unsigned int ms)
+{
+	n_tasks = 0;
+	task_list[n_tasks] = task;
+	ms_freq_of_task[n_tasks] = ms;
+	n_tasks++;
+}
+
 void setPinModes(const uint8_t pins[], const uint8_t direction)
 {
 	char i = 0;
@@ -286,7 +300,7 @@ void calcRPMandDwell()
 		TIMSK4 |= (_BV(OCIE4A) | _BV(OCIE4B));	// enable the out.comp. interrupt (ignition system)
 		TIMSK5 |= (_BV(OCIE5A) | _BV(OCIE5B));	
 
-		digitalWrite(drv_en_pin, LOW);
+		digitalWrite(drv_en_pin, LOW);		// enable the driver chip (active low)
 	}
 	else
 	{
@@ -294,7 +308,7 @@ void calcRPMandDwell()
 		TIMSK4 &= ~_BV(OCIE4A);			// this prevents the coil pin from being set
 		TIMSK5 &= ~_BV(OCIE5A);	
 
-		digitalWrite(drv_en_pin, HIGH);	// this starts a soft-shutdown
+		digitalWrite(drv_en_pin, HIGH);	// this starts a soft-shutdown - this pin active low
 		digitalWrite(coil1_pin, LOW);	// turn off the coil. 
 	}
 
@@ -534,7 +548,7 @@ ISR( TIMER1_CAPT_vect )
 			ms_since_last_task[i] = 0;			// reset this task's between-calls timer.
 
 			task_start_time = TCNT1 >> 4;		// record start in us
-			(*task[i])();						// call task i.
+			(*task_list[i])();						// call task i.
 			task_runtime[i] = TCNT1 >> 4;		// record finish in us
 			task_runtime[i] -= task_start_time;	// subtract to find runtime in us. 
 		}
@@ -550,6 +564,12 @@ ISR( TIMER1_CAPT_vect )
 }
 
 // Injectors open and spark events
+void simulatedTachEdge() {
+	// this function lets the ECU trigger its own tach based on the task scheduler timer (TIMER1)
+	// useful for debugging electrical noise and such - the ECU can produce outputs without the engine running. 
+	if (simulate_tach_en)
+		isrTachEdge();
+}
 void isrTachEdge()
 {
 
@@ -569,7 +589,7 @@ void isrTachEdge()
 		TCNT3 = 0;					// start the timer over. 
 
 		// set all injectors high (in same instruction)
-		if (inj_duration)
+		if (inj_duration && injector_en)
 		{
 			PORTL |= 0xAA;				// 0b 1010 1010;
 			PORTA |= 0x08;				// 0b 0000 1000  (A3 is turned on for LED indication of function) 
@@ -604,10 +624,12 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 // Begin dwell event
 ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A. 
 {
+	if (coil_en)
 	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
 }
 ISR(TIMER5_COMPA_vect)			// same as for timer 4 but uses timer 5 so timer doesn't get reset before both compares happen
 {
+	if (coil_en)
 	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
 }
 
@@ -627,12 +649,12 @@ ISR(TIMER4_OVF_vect)
 	tach_period = 65000;	// this makes it obvious the engine is not running 
 							// rpm will be 1,875,000 / 65,000 = 28 rpm
 
-	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
+	digitalWrite(drv_en_pin, HIGH);	// disables drive (active low).  This causes soft-shutdown of coil (no spark). 
 }
 ISR(TIMER5_OVF_vect)	// same as directly above. Different timer
 {
 	tach_period = 65000;	
-	digitalWrite(drv_en_pin, HIGH);	// disables drive.  This causes soft-shutdown of coil (no spark). 
+	digitalWrite(drv_en_pin, HIGH);	// disables drive (active low).  This causes soft-shutdown of coil (no spark). 
 }
 
 

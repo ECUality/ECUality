@@ -87,6 +87,7 @@ void ECUSerial::executeCommand()
 			
 			if (!strncmp(&c[1], Scale::scales[j]->handle, 3))
 			{
+				// suffix matches, so do the Write, Read or Save. 
 				if (c[0] == 'W')
 				{
 					Scale::write(Scale::scales[j]);
@@ -106,15 +107,14 @@ void ECUSerial::executeCommand()
 		}
 	}
 	
-	// 
+	// We didn't match the incoming command to a Write, Read or Save of a parameter or scale object.
+	// so now we check the misc. command list by just iterating through. 
 	for (i = 0; i < n_commands; i++)
 	{
 		if (!strncmp(c, command_str[i], strlen(command_str[i])))		// if the strings match, strncmp returns 0
 		{
 			// call attached function on the attached object. 
 			(*fun_ptr[i])(obj_ptr[i]);
-			//dumpNonLetters();
-			//HSerial = DefaultSerial;
 			return;
 		}
 	}
