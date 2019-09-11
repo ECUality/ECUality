@@ -72,6 +72,7 @@ const char loadData(void* obj_ptr)
 
 const char reportMode(void* obj_ptr)
 {
+	// prints overall engine status 
 	if (run_condition & _BV(NOT_RUNNING))
 		ESerial.print(F("stop,  "));
 	else if (run_condition & _BV(CRANKING))
@@ -146,7 +147,7 @@ void reportStatus(uint8_t status_to_display)
 		ESerial.print(F("Twk "));
 		ESerial.print(boss.mode);
 		ESerial.print(" ");
-		reportMode(NULL);
+		reportMode(NULL);	// reports the overall engine status (stopped, cranking, coasting, idling, wide-open, part-throttle.) 
 		ESerial.println();
 		break;
 
@@ -165,6 +166,10 @@ void reportStatus(uint8_t status_to_display)
 		break;
 
 	case 7:
+		ESerial.print(F("nomI flag: "));
+		ESerial.print(coil_current_flag);
+		ESerial.println();
+		coil_current_flag = 0;		// clear the coil current flag.  If the pin gets a pulse again the interrupt will set it. 
 		break;
 
 	case 8:

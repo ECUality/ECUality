@@ -52,7 +52,7 @@ void setup()
 	// Execution of these events can be interrupted by a level-1 event. 
 	// These events will interrupt execution of a level-3 event. 
 	n_tasks = 0;
-	addTask(simulatedTachEdge, 50);
+	addTask(simulatedTachEdge, 20);
 	addTask(readAirFlow, 50);
 	addTask(readO2Sensor, 50);
 	addTask(calcRPMandDwell, 50);
@@ -159,7 +159,6 @@ void setup()
 
 void addTask(void(*task)(), unsigned int ms)
 {
-	n_tasks = 0;
 	task_list[n_tasks] = task;
 	ms_freq_of_task[n_tasks] = ms;
 	n_tasks++;
