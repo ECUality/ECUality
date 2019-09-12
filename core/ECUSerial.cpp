@@ -37,10 +37,15 @@ void ECUSerial::executeCommand()
 	//	return;
 
 	// check both serial ports for a received command. Switch active port to whichever has data. 
-	if (Serial.available())
+	if (Serial3.available()) {
+		if (HSerial == &Serial) {	// let us know on USB if we're swtching to Serial3 
+			Serial.println(F("switching to Serial3"));
+			HSerial = &Serial3;
+		}
+	}
+	else if (Serial.available()) {
 		HSerial = &Serial;
-	else if (Serial3.available())
-		HSerial = &Serial3;
+	}
 	else
 		return;
 
