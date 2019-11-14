@@ -9,6 +9,7 @@ const uint8_t o2_pin = A9;
 const uint8_t coolant_temp_pin = A13;
 const uint8_t oil_pressure_pin = A11;
 const uint8_t tach_pin = 18;
+const uint8_t index_pin = 29;	// PORTA-7
 const uint8_t tach_interrupt = 5;		// see "attachinterrupt" page on Arduino.cc
 const uint8_t coil_current_interrupt = 3;	// same as above www.arduino.cc
 const uint8_t idl_full_pin = A10;
@@ -16,7 +17,7 @@ const uint8_t cranking_pin = 10;
 const uint8_t coil_nom_i = 20;
 const uint8_t coil_max_i = 21;
 
-const uint8_t inputs[] = { air_flow_pin, air_temp_pin, o2_pin, coolant_temp_pin, oil_pressure_pin, tach_pin,
+const uint8_t inputs[] = { air_flow_pin, air_temp_pin, o2_pin, coolant_temp_pin, oil_pressure_pin, tach_pin, index_pin,
 idl_full_pin, cranking_pin, coil_nom_i, coil_max_i, '\0' };
 
 // Output pins

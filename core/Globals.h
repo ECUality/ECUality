@@ -31,6 +31,7 @@ uint16_t inj_duration, map_inj_duration, rpm;
 uint16_t g_dwell, advance;	
 volatile uint16_t v_spark_mark, v_dwell_mark; 
 uint8_t coil_current_flag;
+volatile uint8_t active_coil, next_active_coil;
 MovingAverage avg_rpm(4);
 
 volatile uint16_t tach_period;

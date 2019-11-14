@@ -34,6 +34,7 @@ void setup()
 	char enable = 0;
 	simulate_tach_en = 0;					// default to debug resources off. 
 	fuel_pump_en = injector_en = coil_en = 1;	// default to having driving resources on. 
+	active_coil = next_active_coil = 0;	// start with no coil selected - we need to see an index pulse before we know which coil to fire. 
 
 	ESerial.begin(9600);
 	//Serial.begin(115200);
@@ -75,6 +76,7 @@ void setup()
 	setPinModes(inputs, INPUT);
 	setPinModes(outputs, OUTPUT);
 	pinMode(40, INPUT);		// the other hooked-up inj1_pin. 
+	pinMode(index_pin, INPUT_PULLUP);	// enable pullup on index pin. 
 
 	digitalWrite(cs_inj_pin, HIGH);
 	digitalWrite(cs_knock_pin, HIGH);
@@ -308,7 +310,8 @@ void calcRPMandDwell()
 		TIMSK5 &= ~_BV(OCIE5A);	
 
 		digitalWrite(drv_en_pin, HIGH);	// this starts a soft-shutdown - this pin active low
-		digitalWrite(coil1_pin, LOW);	// turn off the coil. 
+		PORTA &= ~active_coil;			// turn off the coil. 
+		//digitalWrite(coil1_pin, LOW);	// turn off the coil. 
 	}
 
 	if (rpm < 800)
@@ -571,12 +574,16 @@ void simulatedTachEdge() {
 }
 void isrTachEdge()
 {
+	if (digitalRead(index_pin) == LOW) {
+		next_active_coil = 0x40;	// if index pin is low, set next active coil 
+		PORTA |= 0x08;				// 
+	}
 
 	// these fuel injection actions happen every other pulse.  We use pulse_divider to track which pulse we're on.
 	static char pulse_divider = 0;	
 	if (!pulse_divider)
 	{
-		// Ignition operations //
+		// Ignition operations - we flip which counter we use based on the pulse_divider 
 		tach_period = TCNT5;	// this was reset last edge, so this measures the most recent tab duration. 
 
 		TCNT4 = 0;	// set a timer for when we begin dwell again
@@ -591,7 +598,6 @@ void isrTachEdge()
 		if (inj_duration && injector_en)
 		{
 			PORTL |= 0xAA;				// 0b 1010 1010;
-			PORTA |= 0x08;				// 0b 0000 1000  (A3 is turned on for LED indication of function) 
 			OCR3A = inj_duration; 
 		}
 		else
@@ -617,29 +623,48 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 {
 	// set all injectors low (in same instruction)
 	PORTL &= ~0xAA;			// 0b01010101; 
-	PORTA &= ~0x08;				// 
 }
 
 // Begin dwell event
+// Coil1: Arduino 28: Mega A6: 0b0100_0000, 0x40, 64
+// Coil2: Arduino 26: Mega A4: 0b0001_0000, 0x10, 16
+// Coil3: Arduino 24: Mega A2: 0b0000_0100, 0x04, 4
+// Coil4: Arduino 22: Mega A0: 0b0000_0001, 0x01, 1
+
 ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A. 
 {
-	if (coil_en)
-	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
+	StartDwell();
 }
 ISR(TIMER5_COMPA_vect)			// same as for timer 4 but uses timer 5 so timer doesn't get reset before both compares happen
 {
+	StartDwell();
+}
+void StartDwell()
+{
+	active_coil = next_active_coil;
+	next_active_coil = active_coil >> 2;
 	if (coil_en)
-	PORTA |= 0x40;		// 0b 0100 0000 (A6 is turned on) starts ign. coil dwell, in prep for spark
+	{
+		PORTA |= active_coil;		// coil is turned on; starts ign.coil dwell, in prep for spark
+		//PORTA |= 0x08;			//(A3 is turned on for LED indication of function) 
+	}
 }
 
 // Spark event
 ISR(TIMER4_COMPB_vect)
 {
-	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
+	Spark();
 }
 ISR(TIMER5_COMPB_vect)
 {
-	PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
+	Spark();
+}
+
+void Spark()
+{
+	PORTA &= ~active_coil;	// Opens coil circuit, causing spark. 
+	//PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
+	PORTA &= ~0x08;				//  turn off LED 
 }
 
 // De-energize ignition coil without spark (dwell exceeded maximum duration)
