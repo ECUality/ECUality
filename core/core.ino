@@ -574,9 +574,9 @@ void simulatedTachEdge() {
 }
 void isrTachEdge()
 {
-	if (digitalRead(index_pin) == LOW) {
+	if ( (PINA & _BV(PA7)) == 0 ) {	// check if index pin is low (triggered) digitalRead(index_pin) == LOW
 		next_active_coil = 0x40;	// if index pin is low, set next active coil 
-		PORTA |= 0x08;				// 
+		PORTA |= 0x08;				// turn on the LED
 	}
 
 	// these fuel injection actions happen every other pulse.  We use pulse_divider to track which pulse we're on.
