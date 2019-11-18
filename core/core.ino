@@ -34,7 +34,6 @@ void setup()
 	char enable = 0;
 	simulate_tach_en = 0;					// default to debug resources off. 
 	fuel_pump_en = injector_en = coil_en = 1;	// default to having driving resources on. 
-	active_coil = next_active_coil = 0;	// start with no coil selected - we need to see an index pulse before we know which coil to fire. 
 
 	ESerial.begin(9600);
 	//Serial.begin(115200);
@@ -310,8 +309,7 @@ void calcRPMandDwell()
 		TIMSK5 &= ~_BV(OCIE5A);	
 
 		digitalWrite(drv_en_pin, HIGH);	// this starts a soft-shutdown - this pin active low
-		PORTA &= ~active_coil;			// turn off the coil. 
-		//digitalWrite(coil1_pin, LOW);	// turn off the coil. 
+		PORTA &= 0xAA;			//  &= 1010_1010 turns off bits 0, 2, 4, and 6 (turns off all coils). 
 	}
 
 	if (rpm < 800)
@@ -574,9 +572,13 @@ void simulatedTachEdge() {
 }
 void isrTachEdge()
 {
+	static uint8_t next_active_coil = 0;
+
 	if ( (PINA & _BV(PA7)) == 0 ) {	// check if index pin is low (triggered) digitalRead(index_pin) == LOW
 		next_active_coil = 0x40;	// if index pin is low, set next active coil 
-		PORTA |= 0x08;				// turn on the LED
+	}
+	else {
+		next_active_coil = next_active_coil >> 2;
 	}
 
 	// these fuel injection actions happen every other pulse.  We use pulse_divider to track which pulse we're on.
@@ -589,6 +591,7 @@ void isrTachEdge()
 		TCNT4 = 0;	// set a timer for when we begin dwell again
 		OCR4A = v_dwell_mark;		// Set the Output compare value for dwell and sparking events.  
 		OCR4B = v_spark_mark;
+		timer4_coil = next_active_coil;
 
 		// Fuel operations //
 		GTCCR |= _BV(PSRSYNC);		// clear the prescaler. 
@@ -613,6 +616,7 @@ void isrTachEdge()
 		TCNT5 = 0;	// set a timer for when we begin dwell again
 		OCR5A = v_dwell_mark;		// Set the Output compare value for dwell and sparking events.  
 		OCR5B = v_spark_mark;
+		timer5_coil = next_active_coil;
 		--pulse_divider;
 	}
 
@@ -633,34 +637,33 @@ ISR(TIMER3_COMPA_vect)			// this runs when TCNT3 == OCR3A.
 
 ISR(TIMER4_COMPA_vect)			// runs when TCNT4 == OCR4A. 
 {
-	StartDwell();
+	StartDwell(timer4_coil);
 }
 ISR(TIMER5_COMPA_vect)			// same as for timer 4 but uses timer 5 so timer doesn't get reset before both compares happen
 {
-	StartDwell();
+	StartDwell(timer5_coil);
 }
-void StartDwell()
+void StartDwell(uint8_t active_coil)
 {
-	active_coil = next_active_coil;
-	next_active_coil = active_coil >> 2;
 	if (coil_en)
 	{
 		PORTA |= active_coil;		// coil is turned on; starts ign.coil dwell, in prep for spark
 		//PORTA |= 0x08;			//(A3 is turned on for LED indication of function) 
+		PORTA |= 0x08;				// turn on the LED
 	}
 }
 
 // Spark event
 ISR(TIMER4_COMPB_vect)
 {
-	Spark();
+	Spark(timer4_coil);
 }
 ISR(TIMER5_COMPB_vect)
 {
-	Spark();
+	Spark(timer5_coil);
 }
 
-void Spark()
+void Spark(uint8_t active_coil)
 {
 	PORTA &= ~active_coil;	// Opens coil circuit, causing spark. 
 	//PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
