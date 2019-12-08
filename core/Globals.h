@@ -72,6 +72,8 @@ FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 Parameter low_speed_dwell("lsd", 50, 300);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
 Parameter hi_speed_dwell("hsd", 50, 300);
 Parameter starting_dwell("std", 50, 400);			// dwell during starting
+Scale rpm_adv("rad", 200, 6000, 0, 70, 4);
+Scale vac_adv("vad", 100, 2000, 0, 50, 4);
 //Parameter min_cranking_rpm("mrp, ")
 
 void NameParams() {
@@ -93,4 +95,7 @@ void NameParams() {
 	temp_scale.setName(F("temp_scale"));
 	air_rpm_scale.setName(F("air_rpm_grid"));
 	idle_scale.setName(F("idle_scale"));
+	rpm_adv.setName(F("rpm_adv"));
+	vac_adv.setName(F("vac_adv"));
+
 }

@@ -387,11 +387,12 @@ void calcIgnitionMarks() {
 	// here we calculate the centrifugal advance (rpm based) 
 	// the units are 1/512ths of a revolution to facilitate division speeds. 
 	// the original timing  
-	if (rpm < 1100) advance = 0;
+	advance = rpm_adv.interpolate(rpm);
+	/*if (rpm < 1100) advance = 0;
 	else if (rpm < 2124) advance = (((rpm - 1100) * 5) >> 8);
 	else if (rpm < 2380) advance = 20 + (((rpm - 2124) * 3) >> 7);
 	else if (rpm < 4428) advance = 26 + (((rpm - 2380) * 5) >> 10);
-	else advance = 35;
+	else advance = 35;*/
 
 	// now we do the vacuum advance.  (light-load advance)
 	// The engine load is indicated by the injector duration (how much fuel enters the cylinder every cycle) 
@@ -400,8 +401,10 @@ void calcIgnitionMarks() {
 	// The manual calls for vacuum advance to begin at .21 bar and max out at .36 bar, 14 degrees (= 20/512'ths)
 	// Using the injector duration scale, .21 bar vacuum = .79 bar absolute = .79*1800 = 1422 inj.
 	// Similarly, .36 bar vacuum = .64 bar absolute = 1152 injector.  
-	if (map_inj_duration < 1200) advance += 20;
-	else if (map_inj_duration < 1456) advance += (((1456 - map_inj_duration) * 5) >> 6);
+	advance += vac_adv.interpolate(map_inj_duration);
+
+	/*if (map_inj_duration < 1200) advance += 20;
+	else if (map_inj_duration < 1456) advance += (((1456 - map_inj_duration) * 5) >> 6);*/
 
 	// That's it.  The advance can vary from 0 to 55.  1/512ths =  0 - 38.7 degrees. 
 	// At 3500 rpm and inj_duration of 1200, we'll have 31(rpm) and 20(load) = 51/512 = 36 degrees. 
