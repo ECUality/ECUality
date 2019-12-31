@@ -387,7 +387,7 @@ void calcIgnitionMarks() {
 	// here we calculate the centrifugal advance (rpm based) 
 	// the units are 1/512ths of a revolution to facilitate division speeds. 
 	// the original timing  
-	advance = rpm_adv.interpolate(rpm);
+	advance = rpm_advance.interpolate(rpm);
 	/*if (rpm < 1100) advance = 0;
 	else if (rpm < 2124) advance = (((rpm - 1100) * 5) >> 8);
 	else if (rpm < 2380) advance = 20 + (((rpm - 2124) * 3) >> 7);
@@ -401,7 +401,7 @@ void calcIgnitionMarks() {
 	// The manual calls for vacuum advance to begin at .21 bar and max out at .36 bar, 14 degrees (= 20/512'ths)
 	// Using the injector duration scale, .21 bar vacuum = .79 bar absolute = .79*1800 = 1422 inj.
 	// Similarly, .36 bar vacuum = .64 bar absolute = 1152 injector.  
-	advance += vac_adv.interpolate(map_inj_duration);
+	advance += vacuum_advance.interpolate(map_inj_duration);
 
 	/*if (map_inj_duration < 1200) advance += 20;
 	else if (map_inj_duration < 1456) advance += (((1456 - map_inj_duration) * 5) >> 6);*/
@@ -410,7 +410,8 @@ void calcIgnitionMarks() {
 	// At 3500 rpm and inj_duration of 1200, we'll have 31(rpm) and 20(load) = 51/512 = 36 degrees. 
 
 
-	spark_position = edge_to_post + 28 - advance;	// advance varies from 0 to 55, so we center it with + 28. 
+	//spark_position = edge_to_post + 28 - advance;	// advance varies from 0 to 55, so we center it with + 28. 
+	spark_position = initial_retard.value - advance;
 
 	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
 	cli(); //disable interrupts during copy to the volatile variables. 
@@ -419,7 +420,7 @@ void calcIgnitionMarks() {
 
 	spark_mark = ( (unsigned long)spark_position * l_tach_period ) >> 8;	// mark = (bdeg of event) * (timer tics per 256 bdeg) / (256 bdeg). 
 
-	dwell_mark = spark_mark - g_dwell;
+	dwell_mark = spark_mark > g_dwell ? spark_mark - g_dwell : 0;	// Make sure dwell_mark is never negative.  
 
 	// disable interrupts while Output Compares are set. 
 	cSREG = SREG; // store SREG value - we don't assume GIE is set, we just copy it. 
