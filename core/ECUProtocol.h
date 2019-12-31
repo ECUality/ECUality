@@ -166,8 +166,10 @@ void reportStatus(uint8_t status_to_display)
 		break;
 
 	case 7:
-		ESerial.print(F("nomI flag: "));
-		ESerial.print(coil_current_flag);
+		ESerial.print(F("dwel "));
+		ESerial.print(g_dwell);
+		ESerial.print(F("nomi "));
+		ESerial.print(0.25 * nom_coil_current.value + 3.0);
 		ESerial.println();
 		coil_current_flag = 0;		// clear the coil current flag.  If the pin gets a pulse again the interrupt will set it. 
 		break;

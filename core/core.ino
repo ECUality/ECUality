@@ -156,6 +156,8 @@ void setup()
 	// following sets an 8ms timeout on dwell with soft shutdown. 
 	// it must come some significant time after SPIInit().  Hence this placement. 
 	SPIInitSparkMode();	
+	_delay_us(1000);
+	SPISetNOMI(nom_coil_current.value);
 }
 
 void addTask(void(*task)(), unsigned int ms)
@@ -253,7 +255,6 @@ void readOilPressure()
 void calcRPMandDwell()
 {
 	static uint16_t old_rpm = 0;
-	static uint16_t l_dwell;
 	static uint16_t l_tach_period; // a local to this function copy of the volatile tach-period
 	char cSREG;
 
@@ -290,7 +291,7 @@ void calcRPMandDwell()
 		}
 	}
 	
-	// DWELL: we only start charging coil if RPM is at least 200
+	// Only start charging coil if RPM is above a minimum and the rpm is relatively stable
 	if ((rpm > MIN_IGN_RPM) && (abs(rpm_d) < (rpm >> 2)))
 	{
 		// clear the output compare flag. 
@@ -312,19 +313,15 @@ void calcRPMandDwell()
 		PORTA &= 0xAA;			//  &= 1010_1010 turns off bits 0, 2, 4, and 6 (turns off all coils). 
 	}
 
-	if (rpm < 800)
-	{
-		if (digitalRead(cranking_pin))
-			l_dwell = starting_dwell.value;		// High dwell during cranking
-		else
-			l_dwell = low_speed_dwell.value;	//this is a longer dwell
+	// Use a fixed dwell for cranking.  Otherwise adjust the dwell to match a target current. 
+	if (rpm < 800 && digitalRead(cranking_pin) ) {
+		g_dwell = starting_dwell.value;		// High dwell during cranking
 	}
-	else
-		l_dwell = hi_speed_dwell.value;
+	else {
+		if (coil_current_flag) g_dwell--;
+		else g_dwell++;
+	}
 
-	cli(); //disable interrupts during copy
-	g_dwell = l_dwell;
-	SREG = cSREG; /* restore SREG value (GIE-bit) to what it was*/
 }
 
 // Pulse duration business
@@ -484,23 +481,6 @@ void updateRunCondition()
 	if (coolant_temp >= cold_threshold.value)
 		run_condition |= _BV(WARM);
 }
-
-/*void updateInjectors()
-{
-	if (inj_duration > 100)
-		OCR3A = inj_duration;		// normal operation
-	else
-		OCR3A = 100;				// if inj_duration = 0, we just drop it. 
-
-	// if we just set the compare register below the timer, we need to close the injector 
-	// because if we don't the timer will have to wrap all the way around before it stops. 
-	if (inj_duration <= TCNT3)		
-	{
-		// turn off the injectors
-		PORTL &= ~0xAA;			// 0b01010101; 
-		PORTA &= ~0x08;				// 
-	}
-}*/
 
 
 // analog reading scaling
@@ -669,6 +649,8 @@ ISR(TIMER5_COMPB_vect)
 
 void Spark(uint8_t active_coil)
 {
+	// check the NOMI pin.  If it's hi, set the coil_current_flag = 1.  Otherwise, = 0; 
+	coil_current_flag = (PIND & _BV(PD1) != 0) ? 1 : 0;	// arduino pin 20 equates to Atmega port PD1 / SDA / INT1 
 	PORTA &= ~active_coil;	// Opens coil circuit, causing spark. 
 	//PORTA &= ~0x40;		// 0b 1011 1111 (A6 is turned off) Opens the ignition coil circuit, causing spark
 	PORTA &= ~0x08;				//  turn off LED 

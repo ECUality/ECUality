@@ -19,7 +19,7 @@ Wtsz local_step_sz: 1
 Wowi time_warming_Oxy: 10
 Wewi time_eng_warm: 20
 Weri time_glo_only: 10
-Wlsd ls_dwell: 180
+Wncc nom_curr: 16
 Whsd hs_dwell: 160
 Wstd start_dwell: 200
 

@@ -69,8 +69,8 @@ Scale idle_scale("isc", 200, 2000, 300, 2000, 2);		// Linear "map" RPM v inj.Dur
 FuelTweaker boss(run_condition, air_flow, rpm, avg_rpm.average, o2,
 	global_correction.value, offset_map, change_map);				// presently contains 7 parameters
 
-Parameter low_speed_dwell("lsd", 50, 300);		// the ignition dwell in 4us units. 1ms - 10ms valid range. 
-Parameter hi_speed_dwell("hsd", 50, 300);
+Parameter nom_coil_current("ncc", 0, 31);	// nominal coil current.  0 = 3.0A 16 = 7.0A 31 = 10.75A
+Parameter hi_speed_dwell("hsd", 50, 300);	// the ignition dwell in 4us units. 1ms - 10ms valid range. 
 Parameter starting_dwell("std", 50, 400);	// dwell during starting
 
 // ignition timing parameters
@@ -88,7 +88,7 @@ void NameParams() {
 	cold_threshold.setName(F("cold_threshold"));
 	cranking_dur.setName(F("cranking_dur"));
 	idle_offset.setName(F("idle_offset"));
-	low_speed_dwell.setName(F("ls_dwell"));
+	nom_coil_current.setName(F("nom_curr"));
 	hi_speed_dwell.setName(F("hs_dwell"));
 	starting_dwell.setName(F("start_dwell"));
 
